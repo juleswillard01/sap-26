@@ -276,6 +276,6 @@ class ReconciliationService:
         """
         if confidence >= 0.95:
             return ReconciliationStatus.MATCHED
-        elif confidence >= 0.5:
+        elif confidence > 0.5:
             return ReconciliationStatus.PARTIAL
         return ReconciliationStatus.UNMATCHED

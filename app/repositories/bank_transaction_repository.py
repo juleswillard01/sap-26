@@ -137,7 +137,7 @@ class BankTransactionRepository:
         Returns:
             List of unreconciled BankTransaction instances.
         """
-        stmt = select(BankTransaction).where(not BankTransaction.reconciled)
+        stmt = select(BankTransaction).where(BankTransaction.reconciled == False)
         return self._db.scalars(stmt).all()
 
     def list_all(
