@@ -26,6 +26,7 @@ app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 app.include_router(dashboard.router)
 app.include_router(export.router)
 app.include_router(clients.router)
+app.include_router(invoices.router)
 app.include_router(pdf.router)
 
 # Scheduler instance
