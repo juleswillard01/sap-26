@@ -54,6 +54,7 @@ async def list_clients(
             "clients/list.html",
             {
                 "request": request,
+                "active_page": "clients",
                 "clients": clients,
                 "search": search or "",
             },
@@ -73,7 +74,9 @@ async def new_client_form(request: Request) -> Any:
     Returns:
         HTML response with create client form.
     """
-    return templates.TemplateResponse("clients/form.html", {"request": request})
+    return templates.TemplateResponse(
+        "clients/form.html", {"request": request, "active_page": "clients"}
+    )
 
 
 @router.post("", response_class=RedirectResponse)
@@ -159,6 +162,7 @@ async def edit_client_form(
             "clients/form.html",
             {
                 "request": request,
+                "active_page": "clients",
                 "client": client,
             },
         )

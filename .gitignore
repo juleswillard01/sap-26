@@ -58,3 +58,16 @@ Thumbs.db
 htmlcov/
 .coverage
 .coverage.*
+
+# Ruff
+.ruff_cache/
+
+# Mypy
+.mypy_cache/
+
+# Pytest
+.pytest_cache/
+
+# Generated docs
+*.html
+!app/web/templates/**/*.html

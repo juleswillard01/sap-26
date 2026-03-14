@@ -143,15 +143,19 @@ class TestSchedulerJobs:
 class TestSchedulerIntegration:
     """Integration tests for scheduler functionality."""
 
-    def test_scheduler_can_be_started_and_stopped(self) -> None:
+    @pytest.mark.asyncio
+    async def test_scheduler_can_be_started_and_stopped(self) -> None:
         """Test complete scheduler lifecycle."""
+        import asyncio
+
         scheduler = setup_scheduler()
         assert not scheduler.running
 
         scheduler.start()
         assert scheduler.running
 
-        scheduler.shutdown(wait=True)
+        scheduler.shutdown(wait=False)
+        await asyncio.sleep(0.1)
         assert not scheduler.running
 
     def test_scheduler_persists_jobs(self) -> None:

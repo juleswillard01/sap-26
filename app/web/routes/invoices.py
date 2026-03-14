@@ -55,6 +55,7 @@ async def list_invoices(
 
         template = templates.get_template("invoices/list.html")
         return template.render(
+            active_page="invoices",
             invoices=invoices,
             total_count=total,
             current_page=page,
@@ -92,6 +93,7 @@ async def create_invoice_form(
 
         template = templates.get_template("invoices/form.html")
         return template.render(
+            active_page="invoices",
             clients=clients,
             is_edit=False,
             invoice=None,
@@ -196,6 +198,7 @@ async def get_invoice(
 
         template = templates.get_template("invoices/detail.html")
         return template.render(
+            active_page="invoices",
             invoice=invoice,
             can_edit=invoice.status == InvoiceStatus.DRAFT,
             can_submit=invoice.status == InvoiceStatus.DRAFT,
@@ -235,6 +238,7 @@ async def edit_invoice_form(
 
         template = templates.get_template("invoices/form.html")
         return template.render(
+            active_page="invoices",
             invoice=invoice,
             clients=clients,
             is_edit=True,

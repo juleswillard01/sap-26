@@ -7,16 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        :root {
-            --color-primary: #0066CC;
-            --color-success: #22C55E;
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
         .btn-primary {
-            background-color: var(--color-primary);
+            background-color: #0066CC;
             color: white;
             padding: 0.5rem 1rem;
             border-radius: 0.375rem;
@@ -26,10 +20,7 @@
             text-decoration: none;
             display: inline-block;
         }
-
-        .btn-primary:hover {
-            opacity: 0.9;
-        }
+        .btn-primary:hover { opacity: 0.9; }
 
         .btn-secondary {
             background-color: #E5E7EB;
@@ -42,10 +33,7 @@
             text-decoration: none;
             display: inline-block;
         }
-
-        .btn-secondary:hover {
-            background-color: #D1D5DB;
-        }
+        .btn-secondary:hover { background-color: #D1D5DB; }
 
         .btn-danger {
             background-color: #EF4444;
@@ -57,29 +45,7 @@
             cursor: pointer;
             border: none;
         }
-
-        .btn-danger:hover {
-            opacity: 0.9;
-        }
-
-        .badge-draft {
-            @apply bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm font-medium;
-        }
-        .badge-submitted {
-            @apply bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium;
-        }
-        .badge-validated {
-            @apply bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium;
-        }
-        .badge-paid {
-            @apply bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium;
-        }
-        .badge-rejected {
-            @apply bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium;
-        }
-        .badge-error {
-            @apply bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium;
-        }
+        .btn-danger:hover { opacity: 0.9; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -93,21 +59,19 @@
             </div>
 
             <nav class="flex-1 mt-6 space-y-2 px-3">
-                <a href="/" class="block px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium">
-                    <span class="inline-block mr-3">📊</span> Tableau de Bord
+                {% set nav_items = [
+                    ("dashboard", "/", "Tableau de Bord"),
+                    ("invoices", "/invoices", "Factures"),
+                    ("clients", "/clients", "Clients"),
+                    ("reconciliation", "/reconciliation", "Rapprochement"),
+                ] %}
+                {% for id, href, label in nav_items %}
+                <a href="{{ href }}"
+                   class="block px-4 py-3 rounded-lg font-medium transition-colors
+                          {% if active_page == id %}text-blue-600 bg-blue-50{% else %}text-gray-700 hover:bg-blue-50 hover:text-blue-600{% endif %}">
+                    {{ label }}
                 </a>
-                <a href="/invoices" class="block px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium">
-                    <span class="inline-block mr-3">📄</span> Factures
-                </a>
-                <a href="/clients" class="block px-4 py-3 rounded-lg text-blue-600 bg-blue-50 transition-colors font-medium">
-                    <span class="inline-block mr-3">👥</span> Clients
-                </a>
-                <a href="/reconciliation" class="block px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium">
-                    <span class="inline-block mr-3">🔄</span> Rapprochement
-                </a>
-                <a href="/settings" class="block px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium">
-                    <span class="inline-block mr-3">⚙️</span> Paramètres
-                </a>
+                {% endfor %}
             </nav>
 
             <div class="p-4 border-t border-gray-200">
@@ -117,17 +81,15 @@
 
         <!-- Main Content Area -->
         <main class="flex-1 flex flex-col overflow-hidden">
-            <!-- Header -->
             <header class="bg-white border-b border-gray-200 shadow-sm px-8 py-4">
                 <div class="flex justify-between items-center">
                     <h2 class="text-xl font-semibold text-gray-800">{% block page_title %}{% endblock %}</h2>
-                    <div class="text-sm text-gray-600">
-                        <span>Utilisateur: test-user</span>
+                    <div class="flex gap-2">
+                        {% block header_actions %}{% endblock %}
                     </div>
                 </div>
             </header>
 
-            <!-- Page Content -->
             <div class="flex-1 overflow-auto">
                 {% block content %}{% endblock %}
             </div>

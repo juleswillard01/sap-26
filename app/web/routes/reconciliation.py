@@ -93,6 +93,7 @@ async def reconciliation_view(
             "reconciliation/index.html",
             {
                 "request": request,
+                "active_page": "reconciliation",
                 "summary": summary,
                 "transactions": txn_data,
                 "payment_requests": payment_data,
@@ -106,6 +107,7 @@ async def reconciliation_view(
             "reconciliation/index.html",
             {
                 "request": request,
+                "active_page": "reconciliation",
                 "error": "Failed to load reconciliation data",
             },
         )

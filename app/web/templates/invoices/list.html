@@ -1,34 +1,33 @@
 {% extends "base.html" %}
 
-{% block title %}Invoices - SAP-Facture{% endblock %}
+{% block title %}Factures - SAP-Facture{% endblock %}
+{% block page_title %}Factures{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="p-8 space-y-6">
     <!-- Header -->
     <div class="flex justify-between items-center">
         <div>
-            <h2 class="text-3xl font-bold text-gray-900">Invoices</h2>
-            <p class="text-gray-600 mt-1">Manage your invoices and submissions</p>
+            <h2 class="text-3xl font-bold text-gray-900">Factures</h2>
+            <p class="text-gray-600 mt-1">Gerez vos factures et soumissions URSSAF</p>
         </div>
-        <a href="/invoices/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium">
-            + New Invoice
-        </a>
+        <a href="/invoices/new" class="btn-primary">+ Nouvelle Facture</a>
     </div>
 
     <!-- Stats Card -->
     {% if invoices %}
     <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-baseline space-x-4">
+        <div class="flex items-baseline space-x-8">
             <div>
-                <p class="text-gray-600 text-sm font-medium">Total CA (this page)</p>
-                <p class="text-3xl font-bold text-gray-900">{{ "%.2f"|format(total_ttc) }} €</p>
+                <p class="text-gray-600 text-sm font-medium">CA (cette page)</p>
+                <p class="text-3xl font-bold text-gray-900">{{ "%.2f"|format(total_ttc) }} &euro;</p>
             </div>
             <div>
-                <p class="text-gray-600 text-sm font-medium">Total Invoices</p>
+                <p class="text-gray-600 text-sm font-medium">Total factures</p>
                 <p class="text-3xl font-bold text-gray-900">{{ total_count }}</p>
             </div>
             <div>
-                <p class="text-gray-600 text-sm font-medium">Current Page</p>
+                <p class="text-gray-600 text-sm font-medium">Page</p>
                 <p class="text-3xl font-bold text-gray-900">{{ current_page }} / {{ total_pages }}</p>
             </div>
         </div>
@@ -39,19 +38,16 @@
     <div class="bg-white rounded-lg shadow p-6">
         <form method="get" class="flex gap-4 items-end">
             <div>
-                <label for="status" class="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Status
-                </label>
+                <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Filtrer par statut</label>
                 <select name="status" id="status" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-900">
-                    <option value="">All Statuses</option>
+                    <option value="">Tous les statuts</option>
+                    {% set status_labels = {"DRAFT": "Brouillon", "SUBMITTED": "Soumis", "VALIDATED": "Valide", "PAID": "Paye", "REJECTED": "Rejete", "ERROR": "Erreur"} %}
                     {% for s in statuses %}
-                    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s }}</option>
+                    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ status_labels.get(s, s) }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
-                Filter
-            </button>
+            <button type="submit" class="btn-secondary">Filtrer</button>
         </form>
     </div>
 
@@ -61,54 +57,40 @@
         <table class="w-full">
             <thead class="bg-gray-50 border-b border-gray-200">
                 <tr>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Invoice #</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Numero</th>
                     <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Client</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Amount TTC</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date Created</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Montant TTC</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Statut</th>
+                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
                     <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
+                {% set badge_classes = {
+                    "DRAFT": "bg-gray-100 text-gray-800",
+                    "SUBMITTED": "bg-blue-100 text-blue-800",
+                    "VALIDATED": "bg-yellow-100 text-yellow-800",
+                    "PAID": "bg-green-100 text-green-800",
+                    "REJECTED": "bg-red-100 text-red-800",
+                    "ERROR": "bg-red-100 text-red-800",
+                } %}
                 {% for invoice in invoices %}
                 <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 text-sm font-medium text-gray-900">
-                        <a href="/invoices/{{ invoice.id }}" class="text-blue-600 hover:text-blue-800">
-                            {{ invoice.invoice_number }}
-                        </a>
+                    <td class="px-6 py-4 text-sm font-medium">
+                        <a href="/invoices/{{ invoice.id }}" class="text-blue-600 hover:underline">{{ invoice.invoice_number }}</a>
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-700">
-                        {{ invoice.client.full_name }}
-                    </td>
-                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">
-                        {{ "%.2f"|format(invoice.amount_ttc) }} €
-                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-700">{{ invoice.client.full_name }}</td>
+                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ "%.2f"|format(invoice.amount_ttc) }} &euro;</td>
                     <td class="px-6 py-4 text-sm">
-                        {% if invoice.status == 'DRAFT' %}
-                            <span class="badge-draft">Draft</span>
-                        {% elif invoice.status == 'SUBMITTED' %}
-                            <span class="badge-submitted">Submitted</span>
-                        {% elif invoice.status == 'VALIDATED' %}
-                            <span class="badge-validated">Validated</span>
-                        {% elif invoice.status == 'PAID' %}
-                            <span class="badge-paid">Paid</span>
-                        {% elif invoice.status == 'REJECTED' %}
-                            <span class="badge-rejected">Rejected</span>
-                        {% else %}
-                            <span class="badge-error">Error</span>
-                        {% endif %}
+                        <span class="px-3 py-1 rounded-full text-sm font-medium {{ badge_classes.get(invoice.status.value, 'bg-gray-100 text-gray-800') }}">
+                            {{ status_labels.get(invoice.status.value, invoice.status.value) }}
+                        </span>
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-700">
-                        {{ invoice.created_at.strftime("%Y-%m-%d") }}
-                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-700">{{ invoice.created_at.strftime("%d/%m/%Y") }}</td>
                     <td class="px-6 py-4 text-sm space-x-3">
-                        <a href="/invoices/{{ invoice.id }}" class="text-blue-600 hover:text-blue-800 font-medium">
-                            View
-                        </a>
+                        <a href="/invoices/{{ invoice.id }}" class="text-blue-600 hover:underline font-medium">Voir</a>
                         {% if invoice.status == 'DRAFT' %}
-                        <a href="/invoices/{{ invoice.id }}/edit" class="text-amber-600 hover:text-amber-800 font-medium">
-                            Edit
-                        </a>
+                        <a href="/invoices/{{ invoice.id }}/edit" class="text-amber-600 hover:underline font-medium">Modifier</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -120,33 +102,23 @@
     <!-- Pagination -->
     <div class="flex justify-between items-center">
         {% if current_page > 1 %}
-        <a href="/invoices?page={{ current_page - 1 }}&status={{ status_filter or '' }}"
-           class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
-            ← Previous
-        </a>
+        <a href="/invoices?page={{ current_page - 1 }}&status={{ status_filter or '' }}" class="btn-secondary">&larr; Precedent</a>
         {% else %}
         <div></div>
         {% endif %}
 
-        <span class="text-gray-700">
-            Page {{ current_page }} of {{ total_pages }}
-        </span>
+        <span class="text-gray-700">Page {{ current_page }} sur {{ total_pages }}</span>
 
         {% if current_page < total_pages %}
-        <a href="/invoices?page={{ current_page + 1 }}&status={{ status_filter or '' }}"
-           class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">
-            Next →
-        </a>
+        <a href="/invoices?page={{ current_page + 1 }}&status={{ status_filter or '' }}" class="btn-secondary">Suivant &rarr;</a>
         {% else %}
         <div></div>
         {% endif %}
     </div>
     {% else %}
     <div class="bg-white rounded-lg shadow p-12 text-center">
-        <p class="text-gray-600 text-lg mb-6">No invoices found.</p>
-        <a href="/invoices/new" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium inline-block">
-            Create your first invoice
-        </a>
+        <p class="text-gray-600 text-lg mb-6">Aucune facture trouvee.</p>
+        <a href="/invoices/new" class="btn-primary">Creer votre premiere facture</a>
     </div>
     {% endif %}
 </div>

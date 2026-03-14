@@ -1,222 +1,137 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tableau de bord - SAP Facture</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-50">
-    <div class="min-h-screen">
-        <!-- Header -->
-        <header class="bg-white shadow">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center">
-                    <h1 class="text-3xl font-bold text-gray-900">
-                        Bonjour {{ user_name }}
-                    </h1>
-                    <div class="flex gap-2">
-                        <a href="/invoices/new" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
-                            Nouvelle facture
-                        </a>
-                        <a href="/sync" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                            Sync URSSAF
-                        </a>
-                        <a href="/export/csv" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                            Exporter CSV
-                        </a>
-                    </div>
-                </div>
+{% extends "base.html" %}
+
+{% block title %}Tableau de bord - SAP-Facture{% endblock %}
+{% block page_title %}Bonjour {{ user_name }}{% endblock %}
+
+{% block header_actions %}
+    <a href="/invoices/new" class="btn-primary">Nouvelle facture</a>
+    <a href="/export/csv" class="btn-secondary">Exporter CSV</a>
+{% endblock %}
+
+{% block content %}
+<div class="p-8">
+    <!-- Stats cards -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">CA Mois</dt>
+                <dd class="mt-1 text-3xl font-extrabold text-blue-600">{{ total_ca_month }} &euro;</dd>
             </div>
-        </header>
-
-        <!-- Main content -->
-        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            <!-- Stats cards -->
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                <!-- CA Mois -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <dt class="text-sm font-medium text-gray-500 truncate">
-                            CA Mois
-                        </dt>
-                        <dd class="mt-1 text-3xl font-extrabold text-blue-600">
-                            {{ total_ca_month }} €
-                        </dd>
-                    </div>
-                </div>
-
-                <!-- CA Année -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <dt class="text-sm font-medium text-gray-500 truncate">
-                            CA Année
-                        </dt>
-                        <dd class="mt-1 text-3xl font-extrabold text-green-600">
-                            {{ total_ca_year }} €
-                        </dd>
-                    </div>
-                </div>
-
-                <!-- Factures en cours -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <dt class="text-sm font-medium text-gray-500 truncate">
-                            Factures en cours
-                        </dt>
-                        <dd class="mt-1 text-3xl font-extrabold text-yellow-600">
-                            {{ invoice_count_by_status.SUBMITTED + invoice_count_by_status.VALIDATED + invoice_count_by_status.ERROR }}
-                        </dd>
-                    </div>
-                </div>
-
-                <!-- Montant en attente -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <dt class="text-sm font-medium text-gray-500 truncate">
-                            Montant en attente
-                        </dt>
-                        <dd class="mt-1 text-3xl font-extrabold text-red-600">
-                            {{ pending_amount }} €
-                        </dd>
-                    </div>
-                </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">CA Annee</dt>
+                <dd class="mt-1 text-3xl font-extrabold text-green-600">{{ total_ca_year }} &euro;</dd>
             </div>
-
-            <!-- Status distribution -->
-            <div class="mt-8 bg-white overflow-hidden shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-                        Récapitulatif des statuts
-                    </h3>
-                    <dl class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Brouillon</dt>
-                            <dd class="text-lg font-semibold text-gray-900">{{ invoice_count_by_status.DRAFT }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Soumis</dt>
-                            <dd class="text-lg font-semibold text-gray-900">{{ invoice_count_by_status.SUBMITTED }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Validé</dt>
-                            <dd class="text-lg font-semibold text-gray-900">{{ invoice_count_by_status.VALIDATED }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Payé</dt>
-                            <dd class="text-lg font-semibold text-green-600">{{ invoice_count_by_status.PAID }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Rejeté</dt>
-                            <dd class="text-lg font-semibold text-gray-900">{{ invoice_count_by_status.REJECTED }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Erreur</dt>
-                            <dd class="text-lg font-semibold text-red-600">{{ invoice_count_by_status.ERROR }}</dd>
-                        </div>
-                    </dl>
-                </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">Factures en cours</dt>
+                <dd class="mt-1 text-3xl font-extrabold text-yellow-600">
+                    {{ invoice_count_by_status.SUBMITTED + invoice_count_by_status.VALIDATED + invoice_count_by_status.ERROR }}
+                </dd>
             </div>
-
-            <!-- Recent invoices -->
-            <div class="mt-8">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-                    Dernières factures
-                </h3>
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Numéro
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Client
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Montant
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Statut
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Date
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            {% if recent_invoices %}
-                                {% for invoice in recent_invoices %}
-                                    <tr>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {{ invoice.invoice_number }}
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ invoice.client.full_name if invoice.client else "N/A" }}
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {{ "%.2f"|format(invoice.amount_ttc) }} €
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                                {% if invoice.status.value == 'DRAFT' %}
-                                                    bg-gray-100 text-gray-800
-                                                {% elif invoice.status.value == 'SUBMITTED' %}
-                                                    bg-blue-100 text-blue-800
-                                                {% elif invoice.status.value == 'VALIDATED' %}
-                                                    bg-yellow-100 text-yellow-800
-                                                {% elif invoice.status.value == 'PAID' %}
-                                                    bg-green-100 text-green-800
-                                                {% elif invoice.status.value == 'REJECTED' %}
-                                                    bg-red-100 text-red-800
-                                                {% elif invoice.status.value == 'ERROR' %}
-                                                    bg-red-100 text-red-800
-                                                {% endif %}
-                                            ">
-                                                {{ invoice.status.value }}
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ invoice.created_at.strftime("%d/%m/%Y") }}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
-                                        Aucune facture
-                                    </td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">Montant en attente</dt>
+                <dd class="mt-1 text-3xl font-extrabold text-red-600">{{ pending_amount }} &euro;</dd>
             </div>
-
-            <!-- Summary stats -->
-            <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <dt class="text-sm font-medium text-gray-500">
-                            Total factures
-                        </dt>
-                        <dd class="mt-2 text-3xl font-extrabold text-gray-900">
-                            {{ total_invoices }}
-                        </dd>
-                    </div>
-                </div>
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <dt class="text-sm font-medium text-gray-500">
-                            Total clients
-                        </dt>
-                        <dd class="mt-2 text-3xl font-extrabold text-gray-900">
-                            {{ total_clients }}
-                        </dd>
-                    </div>
-                </div>
-            </div>
-        </main>
+        </div>
     </div>
-</body>
-</html>
+
+    <!-- Status distribution -->
+    <div class="mt-8 bg-white overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Recapitulatif des statuts</h3>
+            <dl class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                {% set statuses = [
+                    ("Brouillon", "DRAFT", "text-gray-900"),
+                    ("Soumis", "SUBMITTED", "text-gray-900"),
+                    ("Valide", "VALIDATED", "text-gray-900"),
+                    ("Paye", "PAID", "text-green-600"),
+                    ("Rejete", "REJECTED", "text-gray-900"),
+                    ("Erreur", "ERROR", "text-red-600"),
+                ] %}
+                {% for label, key, color in statuses %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">{{ label }}</dt>
+                    <dd class="text-lg font-semibold {{ color }}">{{ invoice_count_by_status[key] }}</dd>
+                </div>
+                {% endfor %}
+            </dl>
+        </div>
+    </div>
+
+    <!-- Recent invoices -->
+    <div class="mt-8">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Dernieres factures</h3>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Numero</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Montant</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% if recent_invoices %}
+                        {% for invoice in recent_invoices %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                <a href="/invoices/{{ invoice.id }}" class="text-blue-600 hover:underline">{{ invoice.invoice_number }}</a>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ invoice.client.full_name if invoice.client else "N/A" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ "%.2f"|format(invoice.amount_ttc) }} &euro;
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% set status_colors = {
+                                    "DRAFT": "bg-gray-100 text-gray-800",
+                                    "SUBMITTED": "bg-blue-100 text-blue-800",
+                                    "VALIDATED": "bg-yellow-100 text-yellow-800",
+                                    "PAID": "bg-green-100 text-green-800",
+                                    "REJECTED": "bg-red-100 text-red-800",
+                                    "ERROR": "bg-red-100 text-red-800",
+                                } %}
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ status_colors.get(invoice.status.value, 'bg-gray-100 text-gray-800') }}">
+                                    {{ invoice.status.value }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ invoice.created_at.strftime("%d/%m/%Y") }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Aucune facture</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500">Total factures</dt>
+                <dd class="mt-2 text-3xl font-extrabold text-gray-900">{{ total_invoices }}</dd>
+            </div>
+        </div>
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500">Total clients</dt>
+                <dd class="mt-2 text-3xl font-extrabold text-gray-900">{{ total_clients }}</dd>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
