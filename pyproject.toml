@@ -2,7 +2,7 @@
 name = "sap-facture"
 version = "0.1.0"
 description = "Plateforme facturation URSSAF pour micro-entrepreneurs SAP"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 dependencies = [
     "fastapi>=0.109",
@@ -37,8 +37,11 @@ dev = [
 sap = "app.cli.main:app"
 
 [build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
 
 [tool.ruff]
 target-version = "py311"
