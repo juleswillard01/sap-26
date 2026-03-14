@@ -1,0 +1,210 @@
+QUESTIONNAIRE - Projet Facturation URSSAF SAP
+=============================================
+Remplis directement tes reponses apres chaque question.
+Ecris libre, pas besoin de phrases parfaites.
+
+Date: _______________
+
+
+== BLOC 1: TON ACTIVITE & VOLUME ==
+
+1. Quels services SAP tu proposes exactement ?
+   (menage, jardinage, garde enfants, cours, bricolage, aide admin...)
+   > cours particuliers
+
+2. Combien de factures par mois en moyenne ?
+   ( ) < 5    ( ) 5-15    ( ) 15-50    ( ) 50+
+   > 15-50
+
+3. Combien de clients differents par mois ?
+   ( ) 1-3    ( ) 4-10    ( ) 11-30    ( ) 30+
+   > 4-10
+
+4. Montant moyen d'une facture ?
+   ( ) < 50E    ( ) 50-200E    ( ) 200-500E    ( ) 500E+
+   > 50-200
+
+5. Tu factures a l'heure ou au forfait ?
+   ( ) Horaire (ex: 25E/h)
+   ( ) Forfait (ex: 150E l'intervention)
+   ( ) Mix des deux
+   ( ) Autre: _______________
+   > Mix des deux
+
+
+== BLOC 2: TON PROCESS ACTUEL ==
+
+6. Comment tu crees tes factures aujourd'hui ?
+   ( ) Excel    ( ) Word    ( ) Indy    ( ) Papier
+   ( ) Autre logiciel: _______________
+   ( ) Pas de vraie facturation en place
+   > Indy mais pas d'api / je souhaite integrer swan aussi pour le rappro / j'aimerais un google sheet aussi pouir controler
+
+7. Combien de temps par facture aujourd'hui ?
+   ( ) < 5 min    ( ) 5-10 min    ( ) 10-20 min    ( ) > 20 min
+   > >20 min
+
+8. Quelles galeres tu rencontres en facturant ?
+   (coche tout ce qui s'applique)
+   ( ) Champs oublies
+   ( ) Erreurs de calcul
+   ( ) Dates mal saisies
+   ( ) Formats URSSAF incorrects
+   ( ) Doublons
+   ( ) C'est surtout du temps perdu
+   ( ) Autre: _______________
+   > Je voudrais automatiser, j'ai besoin d'integrer le logo, je voudrais que ce soit pro
+
+9. Comment tu suis les paiements actuellement ?
+   ( ) Je check ma banque
+   ( ) Je regarde le portail URSSAF
+   ( ) Je demande au client
+   ( ) Pas de suivi, je decouvre
+   ( ) Autre: _______________
+   > je checkk ma banque mais pas de rappro, je voudrais une solution pour checker tout : google sheet / urssaf / swan banque (Indy)
+
+10. Quand un client valide pas sa facture dans les 48h,
+    tu fais quoi ?
+    ( ) Rien, j'attends
+    ( ) J'appelle/j'envoie un message
+    ( ) Ca m'est jamais arrive
+    > pas facturé encore
+
+
+== BLOC 3: IDENTIFIANTS & TECHNIQUE ==
+
+11. Ton numero SIREN ?
+    >991552019
+
+12. Ton numero NOVA (SAP + 9 chiffres SIREN), tu l'as ?
+    ( ) Oui: _______________
+    ( ) Non, je sais pas ce que c'est
+    ( ) En cours d'obtention
+    >SAP991552019
+
+13. Tes cles API URSSAF (Client ID + Client Secret),
+    tu les as recues par quel canal ?
+    ( ) Email    ( ) Portail URSSAF    ( ) Courrier
+    > j'ai un zip on l'integra au bon moment c'est sensible
+
+14. Tu as deja teste l'API (sandbox/production) ?
+    ( ) Oui, ca marche
+    ( ) Oui, mais j'ai eu des erreurs
+    ( ) Non, pas encore
+    > non aps encore
+
+15. Tu utilises Indy pour quoi exactement ?
+    ( ) Facturation
+    ( ) Suivi bancaire / rapprochement
+    ( ) Declarations URSSAF
+    ( ) Tout (compta complete)
+    ( ) Pas encore vraiment utilise
+    > banque car facturation c relou aps d'api, je pourrais aller chez un concurrent mais pas en micro c'est pas rentable
+
+
+== BLOC 4: CE QUE TU VEUX ==
+
+16. Ton objectif principal avec ce projet ?
+    (classe de 1 = prioritaire a 3 = bonus)
+    ___ Proposer l'avance immediate a mes clients
+    ___ Automatiser ma facturation URSSAF
+    ___ Avoir un dashboard de suivi paiements
+    ___ Synchroniser avec Indy
+    ___ Autre: _______________
+    > Ouis l'ordre est bon
+
+17. Tu veux quoi comme interface ?
+    ( ) App web (navigateur)
+    ( ) Script/CLI (terminal)
+    ( ) App mobile
+    ( ) Pas de preference
+    > FastAPI SSR + CLI
+
+18. Tu crees tes factures ou generalement ?
+    ( ) Bureau, sur PC
+    ( ) Sur le terrain (telephone/tablette)
+    ( ) A la maison
+    ( ) Mix
+    > Je le ferais sur PC au debut, webapp ça sera plus tard
+
+19. Pour le MVP, la synchro Indy c'est :
+    ( ) Critique (sinon je saisis deux fois)
+    ( ) Nice to have
+    ( ) Pas besoin pour commencer
+    > critique, ça peut etre du reverse api, de l'export des releves, connexion api swan, faut avoir de quoi faire du rappro bancaire
+
+20. As-tu des factures existantes a importer ?
+    ( ) Oui, environ _____ factures
+    ( ) Non, je pars de zero
+    ( ) Quelques-unes, pas urgent
+    > Non je pars de zero
+
+
+== BLOC 5: TIMING & FUTUR ==
+
+21. Tu voudrais commencer a facturer via l'API quand ?
+    ( ) Cette semaine si possible
+    ( ) Dans 1-2 semaines
+    ( ) Dans 1 mois
+    ( ) Pas urgent
+    > d'ici 1 semaine max
+
+22. Ton volume de factures va evoluer comment ?
+    ( ) Rester stable
+    ( ) Doubler dans l'annee
+    ( ) x5 ou plus
+    ( ) Aucune idee
+    > double je pense
+
+23. Tu prevois d'avoir des collaborateurs plus tard ?
+    ( ) Non, reste solo
+    ( ) Peut-etre 1-2 personnes
+    ( ) Oui, equipe a terme
+    > Non solo
+
+24. Tu as un comptable ?
+    ( ) Oui, regulier
+    ( ) Oui, une fois par an
+    ( ) Non, je gere seul
+    > Non je ger seul, c'est une mciro, l'idee c'est de faire une mini plateforme fonctionellle
+
+
+== BLOC 6: RISQUES & EDGE CASES ==
+
+25. Si tu dois annuler/corriger une facture deja envoyee
+    a l'URSSAF, tu fais comment aujourd'hui ?
+    ( ) Ca m'arrive jamais
+    ( ) Avoir + nouvelle facture
+    ( ) Je sais pas trop
+    > fais des recherches la dessus sujr des cas clients
+
+26. La securite des donnees clients, c'est important ?
+    ( ) Tres important
+    ( ) Normal, standard
+    ( ) Pas vraiment inquiet
+    > Tres important
+
+27. Si la solution plante 1h, c'est :
+    ( ) Grave
+    ( ) Genant mais j'attends
+    ( ) OK si < 24h
+    > OK si >24H
+
+
+== BLOC 7: QUESTIONS LIBRES ==
+
+28. Y a-t-il un truc qui te frustre particulierement
+    dans ton process actuel ?
+    > ouais devoir split les outils pour avoir un truc gratuit, sans des integrations claires
+
+29. Un truc que tu voudrais absolument que la solution fasse
+    et qu'on a pas mentionne ?
+    > dans un futur, avoir les memes fonctionnalites que : https://avance-immediate.fr/#tariff
+
+30. Questions ou remarques ?
+    > Merci BMAD et Claude vous etes indispensables en 2026 pour les solospreneurs
+
+
+=============================================
+Renvoie-moi ce fichier rempli et on lance la suite.
+=============================================
