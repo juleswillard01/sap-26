@@ -110,8 +110,9 @@ class TestCreateInvoice:
         invoice_with_vat.tva_rate = 0.20
         invoice_with_vat.amount_ttc = 1200.0
 
-        with patch.object(InvoiceRepository, "create", return_value=invoice_with_vat):
-            result = invoice_service.create_invoice("user-123", invoice_data)
+        with patch.object(InvoiceRepository, "generate_invoice_number", return_value="2026-03-001"):
+            with patch.object(InvoiceRepository, "create", return_value=invoice_with_vat):
+                result = invoice_service.create_invoice("user-123", invoice_data)
 
         assert result.amount_ttc == 1200.0
 
@@ -119,20 +120,20 @@ class TestCreateInvoice:
         self,
         invoice_service: InvoiceService,
     ) -> None:
-        """Test that creating invoice with invalid amount raises error."""
-        invoice_data = InvoiceCreate(
-            client_id="client-123",
-            description="Test invoice",
-            invoice_type="HEURE",
-            nature_code="100",
-            date_service_from=date(2026, 3, 1),
-            date_service_to=date(2026, 3, 31),
-            amount_ht=-100.0,  # Invalid: negative amount
-            tva_rate=0.0,
-        )
+        """Test that creating invoice with invalid amount raises Pydantic error."""
+        from pydantic_core import ValidationError
 
-        with pytest.raises(ValueError):
-            invoice_service.create_invoice("user-123", invoice_data)
+        with pytest.raises(ValidationError):
+            InvoiceCreate(
+                client_id="client-123",
+                description="Test invoice",
+                invoice_type="HEURE",
+                nature_code="100",
+                date_service_from=date(2026, 3, 1),
+                date_service_to=date(2026, 3, 31),
+                amount_ht=-100.0,  # Invalid: negative amount
+                tva_rate=0.0,
+            )
 
 
 class TestUpdateInvoice:
@@ -312,7 +313,7 @@ class TestCalculateTTC:
     def test_calculate_ttc_rounding(self) -> None:
         """Test that TTC calculation rounds correctly."""
         result = InvoiceService.calculate_ttc(333.33, 0.20)
-        assert result == 399.996  # Rounded to 2 decimals
+        assert result == 400.0  # 333.33 * 1.20 = 400.0
 
     def test_calculate_ttc_invalid_amount_raises(self) -> None:
         """Test that invalid amount raises error."""
