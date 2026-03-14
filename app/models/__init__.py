@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import enum
+import sys
+
+# Compatibility shim for Python <3.11 - must be before importing models
 from app.models.audit_log import AuditLog
 from app.models.bank_transaction import BankTransaction
 from app.models.client import Client

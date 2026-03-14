@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if client %}
+        Éditer Client - SAP-Facture
+    {% else %}
+        Ajouter Client - SAP-Facture
+    {% endif %}
+{% endblock %}
+
+{% block page_title %}
+    {% if client %}
+        Éditer Client: {{ client.full_name }}
+    {% else %}
+        Ajouter un Nouveau Client
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="p-8 max-w-2xl">
+    <form
+        method="post"
+        action="{% if client %}/clients/{{ client.id }}{% else %}/clients{% endif %}"
+        class="bg-white rounded-lg shadow-sm p-8 space-y-6"
+    >
+        <!-- Form Title -->
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">
+                {% if client %}
+                    Modifier les informations du client
+                {% else %}
+                    Créer un nouveau client
+                {% endif %}
+            </h2>
+            <p class="text-gray-600 mt-1">
+                {% if client %}
+                    Mettez à jour les informations de {{ client.full_name }}
+                {% else %}
+                    Ajoutez un nouveau client à votre base de données
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Error Messages -->
+        {% if error %}
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p class="text-red-800 text-sm">{{ error }}</p>
+            </div>
+        {% endif %}
+
+        <!-- Form Fields - Two Columns -->
+        <div class="grid grid-cols-2 gap-6">
+            <!-- First Name -->
+            <div>
+                <label for="first_name" class="block text-sm font-medium text-gray-900 mb-2">
+                    Prénom <span class="text-red-500">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="first_name"
+                    name="first_name"
+                    value="{{ client.first_name if client else '' }}"
+                    required
+                    minlength="1"
+                    maxlength="255"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Jean"
+                />
+            </div>
+
+            <!-- Last Name -->
+            <div>
+                <label for="last_name" class="block text-sm font-medium text-gray-900 mb-2">
+                    Nom <span class="text-red-500">*</span>
+                </label>
+                <input
+                    type="text"
+                    id="last_name"
+                    name="last_name"
+                    value="{{ client.last_name if client else '' }}"
+                    required
+                    minlength="1"
+                    maxlength="255"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Dupont"
+                />
+            </div>
+        </div>
+
+        <!-- Email -->
+        <div>
+            <label for="email" class="block text-sm font-medium text-gray-900 mb-2">
+                Email <span class="text-red-500">*</span>
+            </label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                value="{{ client.email if client else '' }}"
+                required
+                minlength="5"
+                maxlength="255"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: jean.dupont@example.com"
+            />
+            <p class="text-xs text-gray-500 mt-1">Doit être unique pour votre compte</p>
+        </div>
+
+        <!-- Phone -->
+        <div>
+            <label for="phone" class="block text-sm font-medium text-gray-900 mb-2">
+                Téléphone
+            </label>
+            <input
+                type="tel"
+                id="phone"
+                name="phone"
+                value="{{ client.phone if client else '' }}"
+                maxlength="20"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: +33612345678"
+            />
+        </div>
+
+        <!-- Address -->
+        <div>
+            <label for="address" class="block text-sm font-medium text-gray-900 mb-2">
+                Adresse
+            </label>
+            <textarea
+                id="address"
+                name="address"
+                maxlength="500"
+                rows="3"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: 123 rue de la Paix, 75001 Paris"
+            >{% if client %}{{ client.address }}{% endif %}</textarea>
+        </div>
+
+        <!-- SIRET -->
+        <div>
+            <label for="siret" class="block text-sm font-medium text-gray-900 mb-2">
+                SIRET (Facultatif)
+            </label>
+            <input
+                type="text"
+                id="siret"
+                name="siret"
+                value="{{ client.siret if client else '' }}"
+                maxlength="14"
+                pattern="[0-9]{14}"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                placeholder="Exactement 14 chiffres"
+            />
+            <p class="text-xs text-gray-500 mt-1">Doit contenir exactement 14 chiffres</p>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex gap-4 pt-6 border-t border-gray-200">
+            <button
+                type="submit"
+                class="btn-primary"
+            >
+                {% if client %}
+                    💾 Mettre à jour
+                {% else %}
+                    ➕ Créer le client
+                {% endif %}
+            </button>
+            <a href="/clients" class="btn-secondary">
+                ← Annuler
+            </a>
+        </div>
+
+        <!-- Additional Info -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p class="text-sm text-blue-900">
+                <strong>Conseil:</strong> Remplissez le SIRET pour faciliter l'intégration URSSAF.
+                Les champs obligatoires sont marqués avec un astérisque rouge.
+            </p>
+        </div>
+    </form>
+</div>
+
+{% block extra_js %}
+<script>
+    // Client-side SIRET validation
+    document.getElementById('siret').addEventListener('change', function() {
+        const siret = this.value.replace(/\s/g, '');
+        if (siret && (!siret.match(/^\d+$/) || siret.length !== 14)) {
+            this.setCustomValidity('Le SIRET doit contenir exactement 14 chiffres');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+
+    // Email validation
+    document.getElementById('email').addEventListener('change', function() {
+        if (!this.value.includes('@')) {
+            this.setCustomValidity('Veuillez entrer une adresse email valide');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

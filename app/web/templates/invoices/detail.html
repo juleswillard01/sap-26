@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice {{ invoice.invoice_number }} - SAP-Facture{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with Back Link -->
+    <div class="flex justify-between items-start">
+        <div>
+            <a href="/invoices" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">← Back to Invoices</a>
+            <h2 class="text-3xl font-bold text-gray-900">Invoice {{ invoice.invoice_number }}</h2>
+        </div>
+        <div class="text-right">
+            {% if invoice.status == 'DRAFT' %}
+                <span class="badge-draft">Draft</span>
+            {% elif invoice.status == 'SUBMITTED' %}
+                <span class="badge-submitted">Submitted</span>
+            {% elif invoice.status == 'VALIDATED' %}
+                <span class="badge-validated">Validated</span>
+            {% elif invoice.status == 'PAID' %}
+                <span class="badge-paid">Paid</span>
+            {% elif invoice.status == 'REJECTED' %}
+                <span class="badge-rejected">Rejected</span>
+            {% else %}
+                <span class="badge-error">Error</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-3 gap-6">
+        <!-- Left Column: Invoice Details -->
+        <div class="col-span-2 space-y-6">
+            <!-- Client Information -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Client Information</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-600">Client Name</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.client.full_name }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Email</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.client.email }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Phone</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.client.phone or 'N/A' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Address</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.client.address or 'N/A' }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Service Period & Type -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Service Details</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-600">Service Start Date</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.date_service_from.strftime("%d %B %Y") }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Service End Date</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.date_service_to.strftime("%d %B %Y") }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Invoice Type</p>
+                        <p class="text-lg font-medium text-gray-900">
+                            {% if invoice.invoice_type == 'HEURE' %}Hourly{% else %}Fixed Rate{% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Nature Code</p>
+                        <p class="text-lg font-medium text-gray-900">{{ invoice.nature_code }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Description</h3>
+                <p class="text-gray-700 whitespace-pre-wrap">{{ invoice.description }}</p>
+            </div>
+
+            <!-- Timeline -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-6">Timeline</h3>
+                <div class="space-y-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div class="flex items-center justify-center h-8 w-8 rounded-full bg-blue-500 text-white">
+                                ✓
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900">Created</p>
+                            <p class="text-sm text-gray-600">{{ invoice.created_at.strftime("%d %B %Y at %H:%M") }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div class="flex items-center justify-center h-8 w-8 rounded-full {% if invoice.status in ['SUBMITTED', 'VALIDATED', 'PAID'] %}bg-blue-500 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
+                                {% if invoice.status in ['SUBMITTED', 'VALIDATED', 'PAID'] %}✓{% else %}○{% endif %}
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900">Submitted to URSSAF</p>
+                            <p class="text-sm text-gray-600">
+                                {% if invoice.status in ['SUBMITTED', 'VALIDATED', 'PAID'] %}
+                                    {{ invoice.updated_at.strftime("%d %B %Y at %H:%M") }}
+                                {% else %}
+                                    Pending
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div class="flex items-center justify-center h-8 w-8 rounded-full {% if invoice.status in ['VALIDATED', 'PAID'] %}bg-blue-500 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
+                                {% if invoice.status in ['VALIDATED', 'PAID'] %}✓{% else %}○{% endif %}
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900">Validated by URSSAF</p>
+                            <p class="text-sm text-gray-600">
+                                {% if invoice.status in ['VALIDATED', 'PAID'] %}
+                                    Approved
+                                {% else %}
+                                    Pending
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div class="flex items-center justify-center h-8 w-8 rounded-full {% if invoice.status == 'PAID' %}bg-blue-500 text-white{% else %}bg-gray-300 text-gray-600{% endif %}">
+                                {% if invoice.status == 'PAID' %}✓{% else %}○{% endif %}
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900">Payment Received</p>
+                            <p class="text-sm text-gray-600">
+                                {% if invoice.status == 'PAID' %}
+                                    Completed
+                                {% else %}
+                                    Pending
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Summary & Actions -->
+        <div class="col-span-1 space-y-6">
+            <!-- Amount Summary -->
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow p-6 border border-blue-200">
+                <h3 class="text-lg font-semibold text-gray-900 mb-6">Amount Summary</h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <p class="text-sm text-gray-700">Amount (ex. tax)</p>
+                        <p class="text-lg font-semibold text-gray-900">{{ "%.2f"|format(invoice.amount_ht) }} €</p>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <p class="text-sm text-gray-700">VAT ({{ "%.0f"|format(invoice.tva_rate * 100) }}%)</p>
+                        <p class="text-lg font-semibold text-gray-900">{{ "%.2f"|format(invoice.amount_ht * invoice.tva_rate) }} €</p>
+                    </div>
+                    <div class="border-t border-blue-300 pt-4 flex justify-between items-center">
+                        <p class="text-sm font-semibold text-gray-900">Total (incl. tax)</p>
+                        <p class="text-2xl font-bold text-blue-900">{{ "%.2f"|format(invoice.amount_ttc) }} €</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PDF & Payment Info -->
+            {% if invoice.pdf_file_path %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">PDF Document</h3>
+                <a href="{{ invoice.pdf_file_path }}" target="_blank"
+                   class="block w-full text-center bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium">
+                    📄 Download PDF
+                </a>
+            </div>
+            {% endif %}
+
+            {% if invoice.payment_request_id %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Payment Request</h3>
+                <p class="text-sm text-gray-600 mb-2">URSSAF ID</p>
+                <p class="font-mono text-sm text-gray-900 break-all">{{ invoice.payment_request_id }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Action Buttons -->
+            <div class="bg-white rounded-lg shadow p-6 space-y-3">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
+
+                {% if can_edit %}
+                <a href="/invoices/{{ invoice.id }}/edit"
+                   class="block w-full text-center bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium">
+                    ✎ Edit Invoice
+                </a>
+                {% endif %}
+
+                {% if can_submit %}
+                <form method="post" action="/invoices/{{ invoice.id }}/submit" style="display: inline-block; width: 100%;">
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium"
+                            onclick="return confirm('Are you sure you want to submit this invoice to URSSAF?')">
+                        ✓ Submit to URSSAF
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if can_retry %}
+                <form method="post" action="/invoices/{{ invoice.id }}/submit" style="display: inline-block; width: 100%;">
+                    <button type="submit" class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium">
+                        🔄 Retry Submission
+                    </button>
+                </form>
+                {% endif %}
+
+                <a href="/invoices" class="block w-full text-center bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium">
+                    ← Back to List
+                </a>
+            </div>
+
+            <!-- Metadata -->
+            <div class="bg-gray-50 rounded-lg p-4 text-xs space-y-2 text-gray-600">
+                <div>
+                    <p class="font-medium">Created</p>
+                    <p>{{ invoice.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+                </div>
+                <div>
+                    <p class="font-medium">Last Updated</p>
+                    <p>{{ invoice.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+                </div>
+                <div>
+                    <p class="font-medium">Invoice ID</p>
+                    <p class="font-mono break-all">{{ invoice.id }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

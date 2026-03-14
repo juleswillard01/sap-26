@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sap-facture-prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - /opt/sap-facture/data:/app/data
+      - /opt/sap-facture/storage:/app/storage
+      - /opt/sap-facture/.env:/app/.env:ro
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    read_only_root_filesystem: false
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - sap-network
+    depends_on:
+      - nginx
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: sap-facture-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./app/web/static:/usr/share/nginx/html/static:ro
+      - /opt/sap-facture/certs:/etc/nginx/certs:ro
+    networks:
+      - sap-network
+    depends_on:
+      - app
+    restart: always
+
+networks:
+  sap-network:
+    driver: bridge

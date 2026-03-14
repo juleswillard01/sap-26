@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit{% else %}Create{% endif %} Invoice - SAP-Facture{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">
+            {% if is_edit %}Edit Invoice{% else %}Create New Invoice{% endif %}
+        </h2>
+        <p class="text-gray-600 mt-1">
+            {% if is_edit %}Update invoice details (must be in DRAFT status){% else %}Fill in the details below to create a new invoice{% endif %}
+        </p>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="bg-white rounded-lg shadow p-8 space-y-6">
+        <!-- Client Selection -->
+        <div>
+            <label for="client_id" class="block text-sm font-medium text-gray-700 mb-2">
+                Client <span class="text-red-500">*</span>
+            </label>
+            <select name="client_id" id="client_id" required
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select a client</option>
+                {% for client in clients %}
+                <option value="{{ client.id }}" {% if invoice and invoice.client_id == client.id %}selected{% endif %}>
+                    {{ client.full_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="text-gray-600 text-sm mt-1">Choose or create a client first</p>
+        </div>
+
+        <!-- Service Period -->
+        <div class="grid grid-cols-2 gap-6">
+            <div>
+                <label for="date_service_from" class="block text-sm font-medium text-gray-700 mb-2">
+                    Service Start Date <span class="text-red-500">*</span>
+                </label>
+                <input type="date" name="date_service_from" id="date_service_from" required
+                       value="{% if invoice %}{{ invoice.date_service_from.isoformat() }}{% endif %}"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-gray-600 text-sm mt-1">Must be same month as end date</p>
+            </div>
+            <div>
+                <label for="date_service_to" class="block text-sm font-medium text-gray-700 mb-2">
+                    Service End Date <span class="text-red-500">*</span>
+                </label>
+                <input type="date" name="date_service_to" id="date_service_to" required
+                       value="{% if invoice %}{{ invoice.date_service_to.isoformat() }}{% endif %}"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-gray-600 text-sm mt-1">Same month as start date</p>
+            </div>
+        </div>
+
+        <!-- Invoice Type and Nature Code -->
+        <div class="grid grid-cols-2 gap-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3">
+                    Invoice Type <span class="text-red-500">*</span>
+                </label>
+                <div class="space-y-2">
+                    <div>
+                        <input type="radio" name="invoice_type" id="heure" value="HEURE" required
+                               {% if not invoice or invoice.invoice_type == 'HEURE' %}checked{% endif %}
+                               class="w-4 h-4 text-blue-600">
+                        <label for="heure" class="ml-2 text-gray-700">Hourly (HEURE)</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="invoice_type" id="forfait" value="FORFAIT" required
+                               {% if invoice and invoice.invoice_type == 'FORFAIT' %}checked{% endif %}
+                               class="w-4 h-4 text-blue-600">
+                        <label for="forfait" class="ml-2 text-gray-700">Fixed Rate (FORFAIT)</label>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label for="nature_code" class="block text-sm font-medium text-gray-700 mb-2">
+                    Nature Code <span class="text-red-500">*</span>
+                </label>
+                <input type="text" name="nature_code" id="nature_code" maxlength="10" required
+                       value="{% if invoice %}{{ invoice.nature_code }}{% else %}100{% endif %}"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-gray-600 text-sm mt-1">URSSAF code (default: 100 = private lessons)</p>
+            </div>
+        </div>
+
+        <!-- Description -->
+        <div>
+            <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+                Description <span class="text-red-500">*</span>
+            </label>
+            <textarea name="description" id="description" rows="4" required
+                      minlength="5" maxlength="500"
+                      class="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter invoice description (5-500 characters)">{% if invoice %}{{ invoice.description }}{% endif %}</textarea>
+            <p class="text-gray-600 text-sm mt-1">Detailed description of work performed</p>
+        </div>
+
+        <!-- Amount and VAT -->
+        <div class="grid grid-cols-2 gap-6">
+            <div>
+                <label for="amount_ht" class="block text-sm font-medium text-gray-700 mb-2">
+                    Amount (ex. tax) <span class="text-red-500">*</span>
+                </label>
+                <div class="flex">
+                    <input type="number" name="amount_ht" id="amount_ht" step="0.01" min="0.01" max="100000" required
+                           value="{% if invoice %}{{ invoice.amount_ht }}{% endif %}"
+                           hx-trigger="change, input delay:300ms"
+                           hx-vals='{"tva_rate": document.getElementById("tva_rate").value}'
+                           hx-swap="none"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-l-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <span class="bg-gray-100 px-4 py-2 border border-l-0 border-gray-300 rounded-r-lg text-gray-700">€</span>
+                </div>
+                <p class="text-gray-600 text-sm mt-1">Amount excluding tax</p>
+            </div>
+            <div>
+                <label for="tva_rate" class="block text-sm font-medium text-gray-700 mb-2">
+                    VAT Rate <span class="text-red-500">*</span>
+                </label>
+                <div class="flex">
+                    <input type="number" name="tva_rate" id="tva_rate" step="0.01" min="0" max="1" required
+                           value="{% if invoice %}{{ invoice.tva_rate }}{% else %}0{% endif %}"
+                           hx-trigger="change, input delay:300ms"
+                           hx-vals='{"amount_ht": document.getElementById("amount_ht").value}'
+                           hx-swap="none"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-l-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <span class="bg-gray-100 px-4 py-2 border border-l-0 border-gray-300 rounded-r-lg text-gray-700">%</span>
+                </div>
+                <p class="text-gray-600 text-sm mt-1">Default 0% for micro-enterprise</p>
+            </div>
+        </div>
+
+        <!-- Amount TTC Display -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p class="text-sm text-gray-700 mb-1">Total Amount (incl. tax)</p>
+            <p class="text-2xl font-bold text-blue-900">
+                <span id="amount_ttc_display">
+                    {% if invoice %}
+                        {{ "%.2f"|format(invoice.amount_ttc) }}
+                    {% else %}
+                        0.00
+                    {% endif %}
+                </span> €
+            </p>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex gap-4 pt-6 border-t border-gray-200">
+            <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium">
+                {% if is_edit %}Save Changes{% else %}Create Invoice{% endif %}
+            </button>
+            <a href="/invoices" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-900 px-6 py-3 rounded-lg font-medium text-center">
+                Cancel
+            </a>
+        </div>
+    </form>
+
+    <!-- Client-side validation and auto-calculation -->
+    <script>
+        function calculateTTC() {
+            const amountHT = parseFloat(document.getElementById('amount_ht').value) || 0;
+            const tvaRate = parseFloat(document.getElementById('tva_rate').value) || 0;
+
+            if (amountHT > 0) {
+                const ttc = (amountHT * (1 + tvaRate)).toFixed(2);
+                document.getElementById('amount_ttc_display').textContent = ttc;
+            } else {
+                document.getElementById('amount_ttc_display').textContent = '0.00';
+            }
+        }
+
+        function validateDates() {
+            const fromDate = document.getElementById('date_service_from').value;
+            const toDate = document.getElementById('date_service_to').value;
+
+            if (!fromDate || !toDate) return;
+
+            const from = new Date(fromDate);
+            const to = new Date(toDate);
+
+            // Check same month
+            if (from.getFullYear() !== to.getFullYear() || from.getMonth() !== to.getMonth()) {
+                alert('Service dates must be in the same calendar month');
+                return false;
+            }
+
+            // Check order
+            if (from > to) {
+                alert('Service start date must be before end date');
+                return false;
+            }
+
+            return true;
+        }
+
+        // Event listeners
+        document.getElementById('amount_ht').addEventListener('change', calculateTTC);
+        document.getElementById('amount_ht').addEventListener('input', calculateTTC);
+        document.getElementById('tva_rate').addEventListener('change', calculateTTC);
+        document.getElementById('tva_rate').addEventListener('input', calculateTTC);
+
+        document.getElementById('date_service_from').addEventListener('change', validateDates);
+        document.getElementById('date_service_to').addEventListener('change', validateDates);
+
+        // Initial calculation
+        calculateTTC();
+
+        // Form submission validation
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const clientId = document.getElementById('client_id').value;
+            const fromDate = document.getElementById('date_service_from').value;
+            const toDate = document.getElementById('date_service_to').value;
+            const amountHT = parseFloat(document.getElementById('amount_ht').value) || 0;
+
+            if (!clientId) {
+                e.preventDefault();
+                alert('Please select a client');
+                return;
+            }
+
+            if (!fromDate || !toDate) {
+                e.preventDefault();
+                alert('Please enter both start and end dates');
+                return;
+            }
+
+            if (!validateDates()) {
+                e.preventDefault();
+                return;
+            }
+
+            if (amountHT <= 0) {
+                e.preventDefault();
+                alert('Amount must be greater than 0');
+                return;
+            }
+        });
+    </script>
+</div>
+{% endblock %}
