@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings
 from app.tasks.scheduler import setup_scheduler
-from app.web.routes import clients, dashboard, export, pdf
+from app.web.routes import clients, dashboard, export, invoices, pdf, reconciliation
 
 settings = Settings()
 
@@ -28,6 +28,7 @@ app.include_router(export.router)
 app.include_router(clients.router)
 app.include_router(invoices.router)
 app.include_router(pdf.router)
+app.include_router(reconciliation.router)
 
 # Scheduler instance
 scheduler = None
