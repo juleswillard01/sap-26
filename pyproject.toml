@@ -1,0 +1,62 @@
+[project]
+name = "sap-facture"
+version = "0.1.0"
+description = "Plateforme facturation URSSAF pour micro-entrepreneurs SAP"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "httpx>=0.25",
+    "gql[requests]>=3.4",
+    "cryptography>=42.0",
+    "weasyprint>=59.0",
+    "jinja2>=3.1",
+    "typer>=0.9",
+    "apscheduler>=3.10",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.1",
+    "ruff>=0.1",
+    "mypy>=1.7",
+    "factory-boy>=3.3",
+    "freezegun>=1.2",
+    "httpx",
+]
+
+[project.scripts]
+sap = "app.cli.main:app"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 50
