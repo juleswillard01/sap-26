@@ -4,8 +4,8 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: sap-facture-app
+      dockerfile: Dockerfile.dev
+    container_name: sap-facture-dev
     ports:
       - "8000:8000"
     environment:
@@ -14,16 +14,16 @@ services:
       SHEETS_SPREADSHEET_ID: ${SHEETS_SPREADSHEET_ID}
       SHEETS_DRIVE_FOLDER_ID: ${SHEETS_DRIVE_FOLDER_ID}
 
-      # URSSAF API
+      # URSSAF API (sandbox)
       URSSAF_CLIENT_ID: ${URSSAF_CLIENT_ID}
       URSSAF_CLIENT_SECRET: ${URSSAF_CLIENT_SECRET}
       URSSAF_API_BASE_URL: ${URSSAF_API_BASE_URL}
 
-      # Swan API
+      # Swan API (sandbox)
       SWAN_API_KEY: ${SWAN_API_KEY}
       SWAN_API_BASE_URL: ${SWAN_API_BASE_URL}
 
-      # Email
+      # Email (Mailtrap ou Gmail)
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
@@ -31,15 +31,16 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
 
       # App
-      APP_ENVIRONMENT: production
-      APP_LOG_LEVEL: INFO
-      APP_DEBUG: "false"
+      APP_ENVIRONMENT: development
+      APP_LOG_LEVEL: DEBUG
+      APP_DEBUG: "true"
       SECRET_KEY: ${SECRET_KEY}
 
     volumes:
+      - .:/app
+      - /app/venv
+      - /app/.venv
       - ./logs:/app/logs
-
-    restart: unless-stopped
 
     networks:
       - sap-network

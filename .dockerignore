@@ -1,54 +1,38 @@
-# Git
 .git
 .gitignore
-.gitattributes
-
-# Python
+.github
+.pre-commit-config.yaml
+.pytest_cache
+.mypy_cache
+.ruff_cache
 __pycache__
 *.pyc
 *.pyo
-*.egg-info
-.venv
-venv
-env
-*.egg
-
-# Testing
-.pytest_cache
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+.env
+.env.local
+.env.test
+*.db
+*.sqlite3
+data/
+logs/
 .coverage
-htmlcov
-.mypy_cache
-.ruff_cache
-
-# IDE
-.vscode
-.idea
+htmlcov/
+.DS_Store
 *.swp
 *.swo
 *~
-.DS_Store
-
-# Documentation
-docs
-doc
-
-# Development
-.env
-.env.local
-.env.*.local
-.claude
-
-# Docker
-docker-compose*.yml
-Dockerfile*
-
-# CI/CD
-.github
-.gitlab-ci.yml
-.circleci
-
-# Misc
-README.md
-LICENSE
-.editorconfig
 Makefile
+README.md
+docs/
+tests/
+archive/
+.claude/
+.idea/
+.vscode/

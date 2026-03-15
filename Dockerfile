@@ -1,56 +1,55 @@
-# Multi-stage build for SAP-Facture
-# Stage 1: Builder
-FROM python:3.11-slim AS builder
+# Multi-stage build
+FROM python:3.11-slim as builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Install build dependencies for weasyprint
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpango-1.0-0 \
-    libpangoft2-1.0-0 \
-    libcairo2 \
-    libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
+    build-essential libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy project definition and source code
+# Copy project metadata
 COPY pyproject.toml .
-COPY app/ app/
 
-# Install Python dependencies
-RUN python -m pip install --upgrade pip setuptools wheel && \
-    python -m pip install --no-cache-dir .
+# Build wheels
+RUN pip install --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -e .
 
-# Stage 2: Runtime
+# ===== RUNTIME =====
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies for weasyprint
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpango-1.0-0 \
-    libpangoft2-1.0-0 \
-    libcairo2 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    libpq5 curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN useradd -m -u 1000 sap && \
-    mkdir -p /app/data /app/storage/pdfs /app/storage/logos /app/storage/exports && \
-    chown -R sap:sap /app
+RUN useradd -m -u 1000 appuser
 
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy wheels from builder
+COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/pyproject.toml .
 
-# Copy application code
-COPY --chown=sap:sap . .
+# Install wheels
+RUN pip install --no-cache-dir /wheels/* && \
+    rm -rf /wheels
 
-USER sap
+# Copy app code
+COPY --chown=appuser:appuser app/ ./app/
+COPY --chown=appuser:appuser scripts/ ./scripts/
 
-EXPOSE 8000
+# Create logs directory
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
 
+# Switch to non-root user
+USER appuser
+
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
