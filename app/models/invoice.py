@@ -1,78 +1,121 @@
+"""Invoice data models (Pydantic)."""
+
 from __future__ import annotations
 
-import enum
 from datetime import date, datetime
+from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.database import Base
+from pydantic import BaseModel, Field
 
 
-class InvoiceStatus(enum.StrEnum):
-    DRAFT = "DRAFT"
-    SUBMITTED = "SUBMITTED"
-    VALIDATED = "VALIDATED"
-    PAID = "PAID"
-    REJECTED = "REJECTED"
-    ERROR = "ERROR"
+class InvoiceStatus(StrEnum):
+    """Invoice lifecycle status."""
+
+    DRAFT = "DRAFT"  # Created, not submitted
+    SUBMITTED = "SUBMITTED"  # Submitted to URSSAF, waiting validation
+    VALIDATED = "VALIDATED"  # Validated by URSSAF, payment pending
+    PAID = "PAID"  # Payment received and reconciled
+    CANCELLED = "CANCELLED"  # Cancelled or refunded
 
 
-class InvoiceType(enum.StrEnum):
-    HEURE = "HEURE"
-    FORFAIT = "FORFAIT"
+class InvoiceLineItem(BaseModel):
+    """Line item in an invoice."""
+
+    description: str = Field(min_length=1, max_length=255, description="Service description")
+    quantity: float = Field(gt=0, description="Quantity (hours, units)")
+    unit_price: float = Field(gt=0, description="Unit price in EUR")
+
+    @property
+    def total(self) -> float:
+        """Calculate line total."""
+        return self.quantity * self.unit_price
+
+    class Config:
+        """Pydantic model configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "description": "Cours particuliers - Mathématiques",
+                "quantity": 2.0,
+                "unit_price": 25.00,
+            }
+        }
 
 
-class Invoice(Base):
-    __tablename__ = "invoices"
+class Invoice(BaseModel):
+    """Invoice entity (from Google Sheets: Factures onglet)."""
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False, index=True
-    )
-    client_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("clients.id"), nullable=False, index=True
-    )
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique invoice ID")
+    client_id: str = Field(min_length=1, description="Associated client ID")
+    items: list[InvoiceLineItem] = Field(min_length=1, description="Line items")
+    montant_total: float = Field(gt=0, le=100000, description="Total invoice amount in EUR")
 
-    # Invoice details
-    invoice_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    invoice_type: Mapped[InvoiceType] = mapped_column(Enum(InvoiceType), nullable=False)
-    nature_code: Mapped[str] = mapped_column(String(10), default="100")  # SAP cours particuliers
+    # Status tracking
+    status: InvoiceStatus = Field(default=InvoiceStatus.DRAFT, description="Invoice status")
+    date_emission: date = Field(description="Emission date")
+    date_due: date | None = Field(None, description="Due date (auto: emission + 30j)")
 
-    # Dates
-    date_service_from: Mapped[date] = mapped_column(Date, nullable=False)
-    date_service_to: Mapped[date] = mapped_column(Date, nullable=False)
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    submitted_at: datetime | None = Field(None, description="Submission to URSSAF timestamp")
+    validated_at: datetime | None = Field(None, description="URSSAF validation timestamp")
+    paid_at: datetime | None = Field(None, description="Payment received timestamp")
 
-    # Amounts
-    amount_ht: Mapped[float] = mapped_column(Float, nullable=False)
-    tva_rate: Mapped[float] = mapped_column(Float, default=0.0)  # Micro-entreprise = 0% TVA
-    amount_ttc: Mapped[float] = mapped_column(Float, nullable=False)
+    # URSSAF integration
+    urssaf_declaration_id: str | None = Field(None, description="URSSAF declaration ID after submission")
+    urssaf_error: str | None = Field(None, description="URSSAF error message if submission failed")
 
-    # Status
-    status: Mapped[InvoiceStatus] = mapped_column(
-        Enum(InvoiceStatus), default=InvoiceStatus.DRAFT, nullable=False, index=True
-    )
+    # Metadata
+    notes: str | None = Field(None, max_length=500, description="Internal notes")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
-    # PDF
-    pdf_file_path: Mapped[str | None] = mapped_column(String(500))
+    class Config:
+        """Pydantic model configuration."""
 
-    # URSSAF reference
-    payment_request_id: Mapped[str | None] = mapped_column(String(100))
+        json_schema_extra = {
+            "example": {
+                "id": "inv_123456",
+                "client_id": "cli_789012",
+                "items": [
+                    {
+                        "description": "Cours particuliers - Mathématiques",
+                        "quantity": 2.0,
+                        "unit_price": 25.00,
+                    }
+                ],
+                "montant_total": 50.00,
+                "status": "DRAFT",
+                "date_emission": "2026-03-15",
+                "created_at": "2026-03-15T10:00:00",
+            }
+        }
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
-    # Relationships
-    user: Mapped[User] = relationship("User", back_populates="invoices")
-    client: Mapped[Client] = relationship("Client", back_populates="invoices")
-    payment_requests: Mapped[list[PaymentRequest]] = relationship(
-        "PaymentRequest", back_populates="invoice"
-    )
+class InvoiceCreateRequest(BaseModel):
+    """Request body for creating an invoice."""
 
-    def __repr__(self) -> str:
-        return f"<Invoice {self.invoice_number} {self.status.value}>"
+    client_id: str = Field(min_length=1)
+    items: list[InvoiceLineItem] = Field(min_length=1)
+    montant_total: float = Field(gt=0, le=100000)
+    date_emission: date
+    notes: str | None = None
+
+    class Config:
+        """Pydantic model configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "client_id": "cli_789012",
+                "items": [
+                    {
+                        "description": "Cours particuliers - Mathématiques",
+                        "quantity": 2.0,
+                        "unit_price": 25.00,
+                    }
+                ],
+                "montant_total": 50.00,
+                "date_emission": "2026-03-15",
+                "notes": "Paiement dans les 30 jours",
+            }
+        }

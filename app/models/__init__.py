@@ -1,33 +1,22 @@
-from __future__ import annotations
+"""
+Data models using Pydantic v2.
 
-import enum
-import sys
+All external inputs validated against these models.
+Reference: .claude/specs/02-system-architecture.md section 3
+"""
 
-# Compatibility shim for Python <3.11 - StrEnum added in 3.11
-if sys.version_info < (3, 11):
-    class StrEnum(str, enum.Enum):
-        """StrEnum backport for Python <3.11."""
-        def __str__(self) -> str:
-            return str(self.value)
-    enum.StrEnum = StrEnum
-
-# NOW import models after shim is installed
-from app.models.audit_log import AuditLog
-from app.models.bank_transaction import BankTransaction
-from app.models.client import Client
-from app.models.email_queue import EmailQueue
-from app.models.invoice import Invoice
-from app.models.payment_reconciliation import PaymentReconciliation
-from app.models.payment_request import PaymentRequest
-from app.models.user import User
+from .client import Client, ClientCreateRequest, ClientUpdateRequest
+from .invoice import Invoice, InvoiceCreateRequest, InvoiceLineItem, InvoiceStatus
+from .reconciliation import ReconciliationMatch, ReconciliationStatus
 
 __all__ = [
-    "AuditLog",
-    "BankTransaction",
     "Client",
-    "EmailQueue",
+    "ClientCreateRequest",
+    "ClientUpdateRequest",
     "Invoice",
-    "PaymentReconciliation",
-    "PaymentRequest",
-    "User",
+    "InvoiceCreateRequest",
+    "InvoiceLineItem",
+    "InvoiceStatus",
+    "ReconciliationMatch",
+    "ReconciliationStatus",
 ]

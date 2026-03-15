@@ -1,47 +1,62 @@
+"""
+Configuration management using Pydantic Settings.
+
+Reads from .env files per environment:
+- .env.local (development)
+- .env.staging
+- .env.production
+"""
+
 from __future__ import annotations
 
-from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """
+    Application settings loaded from environment variables.
 
-    # Database
-    database_url: str = Field(default="sqlite:///./data/sap.db")
+    All secrets must be configured via .env files (never hardcoded).
+    """
 
-    # URSSAF API
-    urssaf_api_base: str = Field(default="https://portailapi-sandbox.urssaf.fr")
-    urssaf_client_id: str = Field(default="")
-    urssaf_client_secret: str = Field(default="")
+    # API Configuration
+    API_TITLE: str = "SAP-Facture API"
+    API_VERSION: str = "0.1.0"
+    LOG_LEVEL: str = "INFO"
 
-    # Swan API
-    swan_api_url: str = Field(default="https://api.swan.io/sandbox-partner/graphql")
-    swan_access_token: str = Field(default="")
+    # CORS
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]
 
-    # Encryption
-    fernet_key: str = Field(default="")
+    # Google Sheets
+    SPREADSHEET_ID: str  # Required: spreadsheet ID in Google Drive
+    GOOGLE_SERVICE_ACCOUNT_PATH: str = "secrets/service-account.json"
 
-    # SMTP
-    smtp_host: str = Field(default="smtp.gmail.com")
-    smtp_port: int = Field(default=587)
-    smtp_user: str = Field(default="")
-    smtp_password: str = Field(default="")
-    smtp_from: str = Field(default="noreply@sap-facture.fr")
+    # URSSAF API (OAuth2)
+    URSSAF_CLIENT_ID: str  # Required
+    URSSAF_CLIENT_SECRET: str  # Required
+    URSSAF_API_BASE_URL: str = "https://api.matrice.urssaf.fr"
 
-    # App
-    app_env: str = Field(default="development")
-    app_secret_key: str = Field(default="change-me-in-production")
-    app_host: str = Field(default="0.0.0.0")
-    app_port: int = Field(default=8000)
-    log_level: str = Field(default="INFO")
+    # Swan Bank API
+    SWAN_API_KEY: str  # Required
+    SWAN_API_BASE_URL: str = "https://api.swan.io"
+    SWAN_ACCOUNT_ID: str  # Required: account receiving invoices
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # SMTP Configuration
+    SMTP_HOST: str
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str
+    SMTP_PASSWORD: str
+    SMTP_FROM_EMAIL: str = "noreply@sap-facture.com"
 
-    @property
-    def is_production(self) -> bool:
-        return self.app_env == "production"
+    # Cache Configuration
+    CACHE_TTL_SECONDS: int = 300  # 5 minutes default
 
-    @property
-    def is_sandbox(self) -> bool:
-        return "sandbox" in self.urssaf_api_base
+    # Sentry (error tracking)
+    SENTRY_DSN: str | None = None
+
+    class Config:
+        """Pydantic settings configuration."""
+
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True

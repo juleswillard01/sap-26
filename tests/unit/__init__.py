@@ -1,1 +1,1 @@
-from __future__ import annotations
+"""Unit tests with mocked external dependencies."""

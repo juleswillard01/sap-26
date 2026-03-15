@@ -1,36 +1,41 @@
+"""
+Pytest configuration and shared fixtures.
+
+Usage: pytest auto-discovers and uses these fixtures
+Reference: docs/phase3/test-strategy.md section 2
+"""
+
 from __future__ import annotations
 
-import enum
-import sys
-from collections.abc import Generator
-
-# Compatibility shim for Python <3.11 - must be before importing models
-if sys.version_info < (3, 11):
-    if not hasattr(enum, "StrEnum"):
-
-        class StrEnum(str, enum.Enum):  # type: ignore
-            """Compatibility implementation of enum.StrEnum for Python <3.11."""
-
-            pass
-
-        enum.StrEnum = StrEnum
-
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from fastapi.testclient import TestClient
 
-from app.database import Base
+from app.config import Settings
+from app.main import create_app
 
 
-@pytest.fixture()
-def db_session() -> Generator[Session, None, None]:
-    """Create an in-memory SQLite database for testing."""
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    testing_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    session = testing_session()
-    try:
-        yield session
-    finally:
-        session.close()
-        Base.metadata.drop_all(bind=engine)
+@pytest.fixture
+def test_settings() -> Settings:
+    """Test configuration."""
+    return Settings(
+        SPREADSHEET_ID="test-sheet-id",
+        URSSAF_CLIENT_ID="test-urssaf-id",
+        URSSAF_CLIENT_SECRET="test-urssaf-secret",
+        SWAN_API_KEY="test-swan-key",
+        SWAN_ACCOUNT_ID="test-swan-account",
+        SMTP_HOST="localhost",
+        SMTP_USERNAME="test",
+        SMTP_PASSWORD="test",
+    )
+
+
+@pytest.fixture
+def app(test_settings: Settings):
+    """FastAPI test app."""
+    return create_app(test_settings)
+
+
+@pytest.fixture
+def client(app):
+    """FastAPI test client."""
+    return TestClient(app)

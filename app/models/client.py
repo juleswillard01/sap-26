@@ -1,46 +1,99 @@
+"""Client data models (Pydantic)."""
+
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.database import Base
+from pydantic import BaseModel, EmailStr, Field
 
 
-class Client(Base):
-    __tablename__ = "clients"
+class URSSAFStatus(StrEnum):
+    """URSSAF registration status."""
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False, index=True
-    )
+    NOT_REGISTERED = "NOT_REGISTERED"
+    PENDING = "PENDING"
+    ACTIVE = "ACTIVE"
+    ERROR = "ERROR"
 
-    first_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[str | None] = mapped_column(String(20))
-    address: Mapped[str | None] = mapped_column(String(500))
 
-    # URSSAF-specific
-    siret: Mapped[str | None] = mapped_column(String(14))
-    urssaf_particulier_id: Mapped[str | None] = mapped_column(String(100))
-    urssaf_registered: Mapped[bool] = mapped_column(default=False)
+class Client(BaseModel):
+    """Client entity (from Google Sheets: Clients onglet)."""
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique client ID")
+    nom: str = Field(min_length=1, max_length=100, description="Last name")
+    prenom: str = Field(min_length=1, max_length=100, description="First name")
+    email: EmailStr = Field(description="Email address")
+    telephone: str | None = Field(None, max_length=20, description="Phone number")
+    adresse: str | None = Field(None, max_length=255, description="Street address")
+    code_postal: str | None = Field(None, max_length=10, description="Postal code")
+    ville: str | None = Field(None, max_length=100, description="City")
 
-    # Relationships
-    user: Mapped[User] = relationship("User", back_populates="clients")
-    invoices: Mapped[list[Invoice]] = relationship("Invoice", back_populates="client")
+    # URSSAF integration
+    urssaf_id: str | None = Field(None, description="URSSAF registration ID")
+    urssaf_status: URSSAFStatus = Field(default=URSSAFStatus.NOT_REGISTERED, description="URSSAF status")
+    date_urssaf_registration: datetime | None = Field(None, description="URSSAF registration date")
 
-    def __repr__(self) -> str:
-        return f"<Client {self.first_name} {self.last_name}>"
+    # Metadata
+    active: bool = Field(default=True, description="Is client active")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
-    @property
-    def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}"
+    class Config:
+        """Pydantic model configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "id": "cli_123456",
+                "nom": "Dupont",
+                "prenom": "Alice",
+                "email": "alice@example.com",
+                "telephone": "+33612345678",
+                "adresse": "123 Rue de la Paix",
+                "code_postal": "75001",
+                "ville": "Paris",
+                "urssaf_id": None,
+                "urssaf_status": "NOT_REGISTERED",
+                "active": True,
+                "created_at": "2026-03-15T10:00:00",
+                "updated_at": "2026-03-15T10:00:00",
+            }
+        }
+
+
+class ClientCreateRequest(BaseModel):
+    """Request body for creating a client."""
+
+    nom: str = Field(min_length=1, max_length=100)
+    prenom: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    telephone: str | None = None
+    adresse: str | None = None
+    code_postal: str | None = None
+    ville: str | None = None
+
+    class Config:
+        """Pydantic model configuration."""
+
+        json_schema_extra = {
+            "example": {
+                "nom": "Dupont",
+                "prenom": "Alice",
+                "email": "alice@example.com",
+                "telephone": "+33612345678",
+            }
+        }
+
+
+class ClientUpdateRequest(BaseModel):
+    """Request body for updating a client."""
+
+    nom: str | None = None
+    prenom: str | None = None
+    email: EmailStr | None = None
+    telephone: str | None = None
+    adresse: str | None = None
+    code_postal: str | None = None
+    ville: str | None = None
+    active: bool | None = None
