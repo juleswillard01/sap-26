@@ -69,5 +69,5 @@ htmlcov/
 .pytest_cache/
 
 # Generated docs
-*.html
+!docs/schemas/*.html
 !app/web/templates/**/*.html
