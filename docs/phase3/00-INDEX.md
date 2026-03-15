@@ -20,7 +20,7 @@ Contient:
 - Local debugging + testing
 - Database seeding (données test)
 
-### 2. [02-deployment-plan.md](02-deployment-plan.md) **← NEW**
+### 2. [02-deployment-plan.md](02-deployment-plan.md)
 **Sujet**: Infrastructure déploiement (VPS, Docker, SSL, monitoring)
 **Audience**: DevOps, Infrastructure team
 **Longueur**: ~1250 lignes
@@ -36,6 +36,28 @@ Contient:
 - Deployment scripts + rollback
 - Disaster recovery procedures
 - ADRs (Architecture Decision Records)
+
+### 2.5. [02-system-architecture.md](../../.claude/specs/02-system-architecture.md) **← NEW BLUEPRINT**
+**Sujet**: Architecture technique détaillée (layers, components, APIs, patterns)
+**Audience**: Tous les développeurs, Tech Lead
+**Longueur**: ~1250 lignes
+**Qualité Score**: 95/100
+
+Contient:
+- Architecture haute niveau (diagrammes)
+- 5 couches (Présentation, API, Métier, Persistance, Intégrations)
+- SheetsAdapter design + patterns
+- Modèles de données Pydantic détaillés
+- Endpoints API complète (/api/v1/*)
+- Intégrations externes (URSSAF, Swan, SMTP)
+- Déploiement Nginx + Docker
+- Résilience (circuit breaker, retry, health checks)
+- Sécurité (validation, rate limiting, secrets)
+- Performance & caching
+- Monitoring (Prometheus, logs JSON, Sentry)
+- Roadmap implémentation (3 phases)
+
+**Pour commencer l'implémentation**: Lire ce document en entier.
 
 ### 3. [gate-check.md](gate-check.md)
 **Sujet**: Gate criteria avant production
@@ -73,9 +95,10 @@ Contient:
 2. Consulter **02-deployment-plan.md** (section "Coûts" + "Estimation temps")
 
 ### Pour **Développeurs**:
-1. **01-dev-environment.md** (setup local)
-2. **test-strategy.md** (coverage requirements)
-3. **02-deployment-plan.md** (sections 4-5: déploiement et monitoring)
+1. **02-system-architecture.md** (blueprint technique complet) ← Commencer ici
+2. **01-dev-environment.md** (setup local + Docker)
+3. **test-strategy.md** (coverage requirements)
+4. **02-deployment-plan.md** (sections 4-5: déploiement et monitoring)
 
 ### Pour **DevOps/Infrastructure**:
 1. **02-deployment-plan.md** (complet)
@@ -152,11 +175,12 @@ Post-MVP:
 | **Component Specification** | ✅ Complete (04-system-components.md) |
 | **Google Sheets Feasibility** | ✅ Complete (10-google-sheets-feasibility.md) |
 | **Development Environment** | ✅ Complete (01-dev-environment.md) |
-| **Deployment Plan** | ✅ Complete (02-deployment-plan.md) **← NEW** |
+| **Deployment Plan** | ✅ Complete (02-deployment-plan.md) |
+| **System Architecture Doc** | ✅ Complete (02-system-architecture.md) **← NEW** |
 | **Test Strategy** | ✅ Complete (test-strategy.md) |
 | **Gate Criteria** | ✅ Complete (gate-check.md) |
-| **Code Implementation** | 🟡 In Progress |
-| **Staging Deployment** | 🟡 Pending |
+| **Code Implementation** | 🟡 Starting (Foundation sprint) |
+| **Staging Deployment** | ⏳ Pending (Week 3-4) |
 | **Production Launch** | ⏳ Scheduled Week 4 |
 
 ---
