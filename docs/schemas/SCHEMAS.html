@@ -306,7 +306,7 @@ journey
       Client valide dans 48h: 3: Client
       Reminder auto si T+36h: 5: Systeme
       URSSAF traite le paiement: 4: URSSAF
-      Virement recu sur Swan: 5: Swan
+      Virement recu sur Indy: 5: Indy
     section Fin de semaine
       Dashboard factures: 5: Jules
       Rapprochement bancaire auto: 5: Systeme
@@ -348,7 +348,7 @@ flowchart TD
     N --> M
     M -- "Non, expire" --> O["Facture expiree\nrelancer manuellement"]
     M -- Oui --> P["Statut = VALIDE\nURSSAF traite paiement"]
-    P --> Q["URSSAF vire 100% a Jules\n(sur compte Swan/Indy)"]
+    P --> Q["URSSAF vire 100% a Jules\n(sur compte Indy)"]
     Q --> R["Client paye son 50%\ndirectement a l'URSSAF\n(jamais a Jules)"]
     Q --> U["Statut = PAYE\nrapprochement bancaire"]
     style A fill:#1e40af,stroke:#3b82f6,color:#fff
@@ -374,7 +374,7 @@ flowchart TD
 
 <section id="urssaf-api">
   <div class="section-header"><div class="num">3</div><h2>Sequence API URSSAF — Appels Techniques</h2></div>
-  <div class="desc">Diagramme de sequence : OAuth2 + REST + Swan GraphQL.</div>
+  <div class="desc">Diagramme de sequence : OAuth2 + REST + Indy Playwright.</div>
   <div class="diagram-toolbar" data-target="dia-3">
     <button onclick="zoom(this, -0.2)">-</button>
     <span class="zoom-level">100%</span>
@@ -392,7 +392,7 @@ sequenceDiagram
     participant Sheets as Google Sheets
     participant URSSAF as API URSSAF
     participant Client as Client (eleve)
-    participant Swan as Swan/Indy
+    participant Indy as Indy Banking
 
     Note over App,URSSAF: Phase 1 — Authentification
     App->>URSSAF: POST /oauth/token {client_id, client_secret}
@@ -427,13 +427,13 @@ sequenceDiagram
     App->>App: Check 36h sans validation
     App->>Jules: Email : relancer client X
 
-    Note over URSSAF,Swan: Phase 6 — Paiement
-    URSSAF->>Swan: Virement 100% du montant facture
+    Note over URSSAF,Indy: Phase 6 — Paiement
+    URSSAF->>Indy: Virement 100% du montant facture
     Note right of Client: Client paye son 50%\ndirectement a l'URSSAF\n(jamais a Jules)
 
     Note over App,Sheets: Phase 7 — Rapprochement
-    App->>Swan: GET /transactions
-    Swan-->>App: Liste transactions
+    App->>Indy: Playwright export transactions CSV
+    Indy-->>App: CSV transactions parsees
     App->>Sheets: Import dans onglet Transactions
     Note over Sheets: Onglet Lettrage : formules matching auto
     Note over Sheets: Onglet Balances : soldes calcules
@@ -481,7 +481,7 @@ graph TB
         end
         subgraph "Couche Integrations"
             UC["URSSAFClient\nOAuth2 + REST"]
-            SC["SwanClient\nGraphQL"]
+            IC["IndyBrowserAdapter\nPlaywright scraping"]
             PG["PDFGenerator\nweasyprint"]
             EM["EmailNotifier\nSMTP"]
         end
@@ -504,7 +504,7 @@ graph TB
     end
     subgraph "APIs Externes"
         URSSAF["API URSSAF\nportailapi.urssaf.fr"]
-        SWAN["API Swan\ndocs.swan.io"]
+        INDY["Indy Banking\nPlaywright MCP"]
         SMTP["Serveur SMTP"]
         GAPI["Google Sheets API\nsheets.googleapis.com"]
         GDAPI["Google Drive API\ndrive.googleapis.com"]
@@ -519,7 +519,7 @@ graph TB
     IS --> SA & UC & PG
     CS --> SA & UC
     PT --> SA & UC & NS
-    BR --> SA & SC
+    BR --> SA & IC
     NV --> SA
     NS --> EM
     SA --> GAPI
@@ -527,13 +527,13 @@ graph TB
     PG --> GDAPI
     GDAPI --> GD
     UC --> URSSAF
-    SC --> SWAN
+    IC --> INDY
     EM --> SMTP
     style Browser fill:#1e40af,stroke:#3b82f6,color:#fff
     style Terminal fill:#1e40af,stroke:#3b82f6,color:#fff
     style GSheets fill:#1e40af,stroke:#3b82f6,color:#fff
     style URSSAF fill:#059669,stroke:#34d399,color:#fff
-    style SWAN fill:#7c3aed,stroke:#a78bfa,color:#fff
+    style INDY fill:#7c3aed,stroke:#a78bfa,color:#fff
     style S1 fill:#1e40af,stroke:#3b82f6,color:#fff
     style S2 fill:#1e40af,stroke:#3b82f6,color:#fff
     style S3 fill:#1e40af,stroke:#3b82f6,color:#fff
@@ -564,7 +564,7 @@ graph LR
     subgraph "Data Brute (editables sous condition)"
         S1["Clients\nclient_id, nom, prenom, email\ntelephone, adresse, code_postal, ville\nurssaf_id, statut_urssaf, date_inscription, actif"]
         S2["Factures\nfacture_id, client_id, type_unite, nature_code\nquantite, montant_unitaire, montant_total (formule)\ndate_debut, date_fin, description, statut\nurssaf_demande_id, dates suivi, pdf_drive_id"]
-        S3["Transactions\ntransaction_id, swan_id, date_valeur\nmontant, libelle, type, source\nfacture_id, statut_lettrage, date_import"]
+        S3["Transactions\ntransaction_id, indy_id, date_valeur\nmontant, libelle, type, source\nfacture_id, statut_lettrage, date_import"]
     end
     subgraph "Calcule (lecture seule, formules)"
         S4["Lettrage\nfacture_id, montant_facture\ntxn_id, txn_montant, ecart\nscore_confiance\nstatut: AUTO / A_VERIFIER / PAS_DE_MATCH"]
@@ -593,7 +593,7 @@ graph LR
 </section>
 
 <section id="rappro">
-  <div class="section-header"><div class="num">6</div><h2>Rapprochement Bancaire & Lettrage — Swan / URSSAF</h2></div>
+  <div class="section-header"><div class="num">6</div><h2>Rapprochement Bancaire & Lettrage — Indy / URSSAF</h2></div>
   <div class="desc">Lettrage dans Google Sheets : formules matching factures (onglet Factures) avec virements (onglet Transactions).</div>
   <div class="diagram-toolbar" data-target="dia-6">
     <button onclick="zoom(this, -0.2)">-</button>
@@ -660,7 +660,7 @@ stateDiagram-v2
     EXPIRE --> BROUILLON : Re-soumettre
     REJETE --> BROUILLON : Corriger si besoin
     VALIDE --> PAYE : URSSAF effectue le virement
-    PAYE --> RAPPROCHE : Match avec transactions Swan
+    PAYE --> RAPPROCHE : Match avec transactions Indy
     RAPPROCHE --> [*] : Cycle termine
     ANNULE --> [*] : Cycle termine
     note right of BROUILLON
@@ -678,7 +678,7 @@ stateDiagram-v2
     end note
     note right of PAYE
         Virement en cours
-        Verifier compte Swan
+        Verifier compte Indy
     end note
     note right of RAPPROCHE
         Tout est OK
@@ -717,7 +717,7 @@ flowchart TB
     end
     subgraph P2["Phase 2 — Semaine 2-3"]
         direction TB
-        P2A["Rappro bancaire Swan"]
+        P2A["Rappro bancaire Indy"]
         P2B["Email reminder T+36h"]
         P2C["Annulation / avoir"]
         P2D["Historique et recherche"]
