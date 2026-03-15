@@ -1,20 +1,22 @@
-# Rapprochement Bancaire & Lettrage — Swan / URSSAF
+# Rapprochement Bancaire & Lettrage — Indy / URSSAF
 
-**Version**: 1.0
+**Version**: 1.1
 **Date**: Mars 2026
 **Auteur**: Sarah, BMAD Product Owner
-**Contexte**: Phase 2 de SAP-Facture — Automatisation du lettrage des virements URSSAF sur Swan
+**Contexte**: Phase 2 de SAP-Facture — Automatisation du lettrage des virements URSSAF via Indy (Playwright)
+
+**Deviation**: Initialement plannifié avec Swan GraphQL API, remplacé par Indy Playwright scraping (pas d'accès API Swan disponible).
 
 ---
 
 ## 1. Vue d'ensemble métier
 
 ### Objectif
-Matcher automatiquement les virements reçus sur le compte Swan (provenant d'URSSAF) avec les factures émises, afin de passer les factures en statut `RAPPROCHE` et d'assurer la cohérence comptable.
+Matcher automatiquement les virements reçus sur le compte Indy (provenant d'URSSAF) avec les factures émises, afin de passer les factures en statut `RAPPROCHE` et d'assurer la cohérence comptable.
 
 ### Acteurs
 - **Jules** (utilisateur final) : valide ou corrige manuellement les matchs douteux
-- **Système** (BankReconciliation Service) : importe les transactions Swan, lance l'algorithme de scoring, propose les lettres
+- **Système** (BankReconciliation Service) : importe les transactions Indy (via export CSV Playwright), lance l'algorithme de scoring, propose les lettres
 - **Google Sheets** : stocke les résultats (onglet Lettrage, Balances)
 
 ### Statuts cibles
@@ -34,9 +36,10 @@ Matcher automatiquement les virements reçus sur le compte Swan (provenant d'URS
 │ FLUX RAPPROCHEMENT BANCAIRE                                │
 └─────────────────────────────────────────────────────────────┘
 
-[1] Import des transactions Swan
-    └─ Query Swan GraphQL : toutes transactions des 30 derniers jours
-    └─ Filter : montants > 0, type = CREDIT, source = URSSAF (libelle)
+[1] Import des transactions Indy
+    └─ Playwright scraping : login Indy → export CSV (30 derniers jours)
+    └─ Parser CSV : champs (date, montant, libelle, reference)
+    └─ Filter : montants > 0, libelle contient URSSAF
     └─ Ecrire dans onglet Transactions (Google Sheets)
 
 [2] Lancement du matching automatique
@@ -80,9 +83,9 @@ Jour 0 : Jules cree facture 1500€
   ↓
 Jour 1 : Client valide sur portail URSSAF
   ↓
-Jour 2-5 : URSSAF effectue virement 1500€ → Swan
+Jour 2-5 : URSSAF effectue virement 1500€ → Indy
   ↓
-Jour 5 18h : Cron import Swan (toutes les 4h)
+Jour 5 18h : Cron import Indy (toutes les 4h)
   ↓
 Jour 5 19h : Matching auto exécuté
   └─ Transaction trouvée avec montant 1500€, date virement J+2
@@ -378,175 +381,163 @@ Jules peut :
 
 ---
 
-## 6. Intégration API Swan GraphQL
+## 6. Intégration Indy (Playwright Scraping)
 
 ### 6.1 Architecture d'intégration
 
 ```
 SAP-Facture (FastAPI)
   │
-  ├─ SwanClient (class)
+  ├─ IndyClient (class)
   │  └─ async def get_transactions(
-  │         account_id: str,
-  │         limit: int = 100,
-  │         after_date: date = None
+  │         username: str,
+  │         password: str,
+  │         days_back: int = 30
   │     ) -> list[Transaction]
   │
   └─ BankReconciliation Service
      └─ lettrer_factures()
-        └─ appelle Swan.get_transactions()
+        └─ appelle Indy.get_transactions()
+        └─ parse CSV export
         └─ lance matching automatique
 ```
 
-### 6.2 Query GraphQL (Swan API)
+### 6.2 Flux Playwright (Indy)
 
-```graphql
-query GetTransactions(
-  $accountId: ID!
-  $first: Int
-  $after: String
-) {
-  account(id: $accountId) {
-    transactions(
-      first: $first
-      after: $after
-      orderBy: CREATION_DATE_DESC
-    ) {
-      edges {
-        node {
-          id
-          reference
-          amount {
-            value
-            currency
-          }
-          bookingDate
-          valueDate
-          label
-          counterparty {
-            name
-          }
-          direction
-          status
-        }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-    }
-  }
-}
+```
+1. Démarrer navigateur Playwright
+2. Naviguer vers portail Indy
+3. Remplir login (email, password)
+4. Attendre authentification
+5. Naviguer vers "Mes transactions" / "Opérations bancaires"
+6. Filtrer date (30 derniers jours)
+7. Exporter en CSV
+8. Parser CSV en mémoire
+9. Extraire champs : date, montant, libelle, reference
+10. Fermer navigateur
 ```
 
-### 6.3 Champs extraits et mapping
+### 6.3 Champs disponibles dans l'export Indy
 
-| Champ Swan | Type | Mapping SAP | Utilité |
-|-----------|------|-----------|---------|
-| `id` | String | `transaction_id` | Clé unique |
-| `reference` | String | `swan_reference` | Ref interne Swan |
-| `amount.value` | Decimal | `montant` | Montant TTC |
-| `amount.currency` | String | `devise` | EUR (assertion) |
-| `valueDate` | ISO Date | `date_valeur` | Date de crédit compte |
-| `label` | String | `libelle` | "URSSAF PARIS…" |
-| `counterparty.name` | String | `nom_tiers` | "URSSAF" confirmé |
-| `direction` | ENUM | filter | IN (tous les credits) |
-| `status` | ENUM | filter | IN (BOOKED, SETTLED) |
-| `bookingDate` | ISO Date | `date_comptable` | Jour comptage |
+| Champ CSV Indy | Type | Mapping SAP | Utilité |
+|---|---|---|---|
+| `date` | ISO Date (YYYY-MM-DD) | `date_valeur` | Date de l'opération |
+| `montant` | Decimal (ex: 1500.00) | `montant` | Montant TTC |
+| `libelle` | String | `libelle` | "URSSAF PARIS REF XXX" |
+| `reference` | String | `indy_reference` | Ref interne Indy |
 
-### 6.4 Pagination et limites
+**Note**: Structure du CSV peut varier selon interface Indy. À ajuster si colonnes changent.
+
+### 6.4 Implémentation Playwright
 
 ```python
-class SwanClient:
+class IndyClient:
     async def get_transactions(
         self,
-        account_id: str,
-        days_back: int = 30,  # Par défaut, 30 derniers jours
-        limit: int = 100      # Transactions par requête
+        username: str,
+        password: str,
+        days_back: int = 30
     ) -> list[Transaction]:
         """
-        Récupère toutes les transactions des N derniers jours.
-        Gère la pagination Swan automatiquement (curseurs).
+        Récupère les transactions Indy via Playwright scraping.
+        Exporte en CSV et parse les champs.
         """
+        browser = await async_playwright().start()
+        context = await browser.new_context()
+        page = await context.new_page()
         transactions = []
-        after_cursor = None
-        date_min = date.today() - timedelta(days=days_back)
 
-        while True:
-            response = await self.execute_query(
-                query=GET_TRANSACTIONS_QUERY,
-                variables={
-                    "accountId": account_id,
-                    "first": limit,
-                    "after": after_cursor
-                }
-            )
+        try:
+            # 1. Login
+            await page.goto("https://www.indy.fr/login")
+            await page.fill('input[type="email"]', username)
+            await page.fill('input[type="password"]', password)
+            await page.click('button[type="submit"]')
+            await page.wait_for_load_state("networkidle")
 
-            edges = response["account"]["transactions"]["edges"]
-            for edge in edges:
-                txn = edge["node"]
-                parsed = Transaction(
-                    id=txn["id"],
-                    montant=txn["amount"]["value"],
-                    devise=txn["amount"]["currency"],
-                    date_valeur=parse_date(txn["valueDate"]),
-                    libelle=txn["label"],
-                    counterparty=txn["counterparty"]["name"],
-                    status=txn["status"]
-                )
-                if parsed.date_valeur >= date_min:
-                    transactions.append(parsed)
+            # 2. Naviguer vers transactions
+            await page.goto("https://www.indy.fr/account/operations")
+            await page.wait_for_selector('[data-testid="transactions-list"]')
 
-            # Pagination
-            page_info = response["account"]["transactions"]["pageInfo"]
-            if not page_info["hasNextPage"]:
-                break
-            after_cursor = page_info["endCursor"]
+            # 3. Filtrer date (30 derniers jours)
+            date_min = date.today() - timedelta(days=days_back)
+            # (Sélecteurs à ajuster selon interface Indy actuelle)
+            await page.click('[data-testid="filter-date-range"]')
+            await page.fill('input[aria-label="Date début"]', date_min.strftime("%d/%m/%Y"))
+            await page.click('button:has-text("Appliquer")')
+            await page.wait_for_load_state("networkidle")
 
-        return transactions
+            # 4. Exporter en CSV
+            async with page.expect_download() as download_info:
+                await page.click('button:has-text("Exporter")')
+            download = await download_info.value
+
+            # 5. Parser CSV
+            csv_path = await download.path()
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    transaction = Transaction(
+                        id=row.get('reference', '').strip(),
+                        montant=float(row.get('montant', 0)),
+                        devise="EUR",
+                        date_valeur=parse_date(row.get('date', '')),
+                        libelle=row.get('libelle', '').strip(),
+                        status="DOWNLOADED"  # Status unique Indy
+                    )
+                    transactions.append(transaction)
+
+            return transactions
+
+        finally:
+            await context.close()
+            await browser.close()
 ```
 
-### 6.5 Erreurs et retry
+### 6.5 Gestion des erreurs Playwright
 
 ```python
 async def get_transactions_with_retry(
     self,
-    account_id: str,
+    username: str,
+    password: str,
     max_retries: int = 3
 ) -> list[Transaction]:
-    """Gère les erreurs Swan (rate limit, timeout, 5xx)."""
+    """Gère les erreurs Playwright (timeout, auth, page changes)."""
 
     for attempt in range(max_retries):
         try:
-            return await self.get_transactions(account_id)
+            return await self.get_transactions(username, password)
 
-        except RateLimitError as e:
-            # Swan rate limit (429)
-            wait_time = int(e.retry_after) if hasattr(e, 'retry_after') else 60
-            logger.warning(f"Swan rate limit, attente {wait_time}s")
-            await asyncio.sleep(wait_time)
-
-        except ConnectionError as e:
-            # Timeout ou réseau
+        except TimeoutError as e:
+            # Page ou élément non trouvé dans le délai
             if attempt < max_retries - 1:
-                wait_time = 5 * (2 ** attempt)  # Backoff exponentiel
-                logger.warning(f"Retry Swan {attempt+1}/{max_retries}, attente {wait_time}s")
+                wait_time = 5 * (2 ** attempt)
+                logger.warning(f"Indy timeout, retry {attempt+1}/{max_retries}, attente {wait_time}s")
                 await asyncio.sleep(wait_time)
             else:
+                logger.error("Indy scraping timeout after retries", exc_info=True)
                 raise
 
         except AuthError as e:
-            # Token expiré ou invalide
-            logger.error("Swan auth failed, token invalide")
-            # Chercher nouveau token (refresh)
-            await self.refresh_access_token()
-            # Relancer
-            if attempt < max_retries - 1:
-                continue
-            else:
-                raise
+            # Identifiants incorrects ou session expirée
+            logger.error(f"Indy auth failed: {e}")
+            # Pas de retry pour auth failure
+            raise
 
-    raise Exception("Swan fetch failed after retries")
+        except ValueError as e:
+            # Erreur parsing CSV (colonnes manquantes, format invalide)
+            logger.error(f"Indy CSV parse error: {e}", exc_info=True)
+            raise
+
+    raise Exception("Indy scraping failed after retries")
+```
+
+### 6.6 Notes de maintenance
+
+- **Changements d'interface Indy** : Si Indy change son interface web, les sélecteurs Playwright doivent être mis à jour.
+- **Stabilité** : Scraping est moins stable que GraphQL API. Ajouter délais d'attente supplémentaires si nécessaire.
+- **Credentials** : Username/password stockés en `.env` (variables `INDY_USERNAME`, `INDY_PASSWORD`).
 ```
 
 ---
@@ -579,30 +570,30 @@ Montant detecté : 1500€ facture vs 750€ transaction
 
 ### 7.2 Doublon de transaction
 
-**Scénario** : Swan importe 2 fois la même transaction (bug import, webhook double).
+**Scénario** : L'export Indy contient 2 fois la même transaction (bug scraping, interface change, délai refresh).
 
 ```
-Transaction 1 : ID=TXN-001, 1500€, "URSSAF", J+2
-Transaction 2 : ID=TXN-002, 1500€, "URSSAF", J+2 (doublon)
+Transaction 1 : ID=REF-001, 1500€, "URSSAF", J+2
+Transaction 2 : ID=REF-002, 1500€, "URSSAF", J+2 (doublon)
 
 Lettrage pour facture 1500€ :
-├─ Match TXN-001 : score 100 → LETTRE
-├─ Match TXN-002 : score 100, mais facture déjà lettrée
+├─ Match REF-001 : score 100 → LETTRE
+├─ Match REF-002 : score 100, mais facture déjà lettrée
 │  └─ Flag "DOUBLON_DETECTE"
-│  └─ Marquer TXN-002 statut = "DOUBLON"
+│  └─ Marquer REF-002 statut = "DOUBLON"
 │  └─ Alerte : "Transaction dupliquée détectée"
 │
 Action Jules :
-└─ Suppression du doublon dans Swan (ou marquer ignore dans SAP)
+└─ Marquer doublon ignore dans SAP (suppression manuellement sur Indy si nécessaire)
 ```
 
 **Prevention** :
-- Deduplication au niveau Swan (garder transaction la plus récente)
+- Deduplication au niveau du parsing Indy (garder transaction la plus récente par ID)
 - Hash transactions (montant + date + libellé) pour détecter doublons avant matching
 
 ### 7.3 Transaction non-URSSAF
 
-**Scénario** : Virement entrant sur Swan qui n'a rien à voir avec les factures (remboursement bancaire, virement privé).
+**Scénario** : Opération bancaire sur Indy qui n'a rien à voir avec les factures (remboursement intérêts, virement privé, frais).
 
 ```
 Transaction : 100€, "Remboursement intérêts compte"
@@ -619,72 +610,73 @@ Jules voit :
 ```
 
 **Prevention** :
-- Filter Swan : ne chercher que montants >= seuil minimum (ex: 500€)
+- Filter Indy export : ne chercher que montants >= seuil minimum (ex: 500€)
 - Filter libellé : chercher "URSSAF" obligatoirement dans la phase matching
 - Donner option à Jules de "classer" les transactions orphelines
 
 ### 7.4 Paiement fusion (multi-factures)
 
-**Scénario** : Jules a 2 factures non-payées (1200€ + 800€). URSSAF les agrège et vire 2000€ en une seule transaction.
+**Scénario** : Jules a 2 factures non-payées (1200€ + 800€). URSSAF les agrège et vire 2000€ en une seule opération bancaire.
 
 ```
 Factures :
   FAC-001 : 1200€, date_soumis J-5 → état PAYE, en attente lettrage
   FAC-002 : 800€, date_soumis J-3 → état PAYE, en attente lettrage
 
-Swan Transaction :
-  TXN-100 : 2000€, "URSSAF FUSION", J+2
+Opération Indy :
+  OPE-100 : 2000€, "URSSAF FUSION", J+2
 
 Matching :
-├─ FAC-001 vs TXN-100
+├─ FAC-001 vs OPE-100
 │  └─ Montant : 1200€ ≠ 2000€ → 0 points → PAS_DE_MATCH
 │
-├─ FAC-002 vs TXN-100
+├─ FAC-002 vs OPE-100
 │  └─ Montant : 800€ ≠ 2000€ → 0 points → PAS_DE_MATCH
 │
 └─ Aucune facture lettree
 
 Jules doit :
-├─ Option 1 : Créer facture "FUSION" de 2000€ → lettrer TXN-100
-├─ Option 2 : Split manuel de TXN-100 (créer TXN-100A=1200€, TXN-100B=800€)
+├─ Option 1 : Créer facture "FUSION" de 2000€ → lettrer OPE-100
+├─ Option 2 : Split manuel de OPE-100 (créer OPE-100A=1200€, OPE-100B=800€)
 │             → puis lettrer chacun
 ├─ Option 3 : Forcer lettrage manuel sur les 2 factures
-│  └─ Drag TXN-100 sur FAC-001 → "Lettrage partiel 1200€ de 2000€"
-│  └─ Drag TXN-100 sur FAC-002 → "Lettrage partiel 800€ de 2000€"
+│  └─ Drag OPE-100 sur FAC-001 → "Lettrage partiel 1200€ de 2000€"
+│  └─ Drag OPE-100 sur FAC-002 → "Lettrage partiel 800€ de 2000€"
 │
 Recommandation :
-└─ Pour MVP : détection fusion (montant TXN = SUM montants factures)
-└─ Pour Phase 2 : UI multi-select pour lettrer 1 txn avec N factures
+└─ Pour MVP : détection fusion (montant OPE = SUM montants factures)
+└─ Pour Phase 2 : UI multi-select pour lettrer 1 opération avec N factures
 ```
 
-### 7.5 Transaction antidatée (Swan import retardé)
+### 7.5 Opération antidatée (Indy import retardé)
 
-**Scénario** : URSSAF a virement le 5 mars, mais Swan le reporte le 12 mars (sync retard).
+**Scénario** : URSSAF a virement le 5 mars, mais l'export Indy le reporte le 12 mars (sync retard, interface refresh lent).
 
 ```
 Facture FAC-001 : date_soumis = 01-Mar
   ↓ (normalement URSSAF transfère J+2-4)
 Virement URSSAF réel : 05-Mar
-  ↓ (Swan sync retard)
-Apparait dans Swan : 12-Mar
+  ↓ (Indy sync retard, scraping décalé)
+Apparait dans export Indy : 12-Mar
 
 Matching le 12 mars :
-├─ date_facture = 01-Mar, date_transaction = 12-Mar
+├─ date_facture = 01-Mar, date_operation = 12-Mar
 ├─ Écart = +11 jours > fenêtre +5j
 └─ Score = 0 → PAS_DE_MATCH
 
 Jules le 13 mars :
-├─ Remarque la transaction orpheline
-├─ Vérifie manually : "Transaction du 12 Mars, mais vraiment reçue le 5"
-├─ Corrige la date dans Swan (ou clique "Corriger date de valeur")
+├─ Remarque l'opération orpheline
+├─ Vérifie manually : "Opération du 12 Mars, mais vraiment reçue le 5"
+├─ Correction manuelle : ajuste date dans onglet Transactions ou re-scrape Indy
 ├─ Relance le matching → trouve FAC-001
 └─ Lettrage appliqué
 ```
 
 **Prevention** :
-- Lors import Swan, capturer `valueDate` (date crédit réel) et `bookingDate` (date comptable)
-- Utiliser `valueDate` pour matching (plus fiable)
-- Log écarts entre valueDate et importDate pour audit
+- Si Indy API disponible un jour, capturer `valueDate` (date crédit réel) et `bookingDate` (date comptable)
+- Utiliser date réelle pour matching (plus fiable)
+- Log écarts entre date réelle et importDate pour audit
+- Pour MVP Playwright : faire scraping sur l'onglet "Opérations" qui affiche date réelle
 
 ---
 
@@ -867,7 +859,7 @@ Phase 1 (MVP)
 └─ ✓ Google Sheets storage
 
 Phase 2 (Cette spec)
-├─ ✓ Swan API GraphQL (récupération transactions)
+├─ ✓ Indy Playwright scraping (récupération transactions)
 ├─ ✓ BankReconciliation Service (matching algo)
 ├─ ✓ Onglet Lettrage (Sheets avec formules)
 └─ ✓ Dashboard Jules (web UI pour validations)
@@ -887,7 +879,7 @@ cron:
   schedule: "0 */4 * * *"
   timeout: "15 min"
   action:
-    1. Import Swan transactions (30 derniers jours)
+    1. Import Indy transactions via Playwright (30 derniers jours)
     2. Lance algorithme matching pour factures PAYE
     3. Applique lettres auto (score >= 80)
     4. Crée suggestions (50 <= score < 80)
@@ -910,7 +902,7 @@ cron:
   schedule: "0 23 1 * *"
   timeout: "20 min"
   action:
-    1. Vérifie solde Sheets = solde Swan (tolerance +/- 0.01€)
+    1. Vérifie solde Sheets = solde Indy (tolerance +/- 0.01€)
     2. Exporte rapport audit Lettrage
     3. Marque toutes les transactions comme "RECONCILED" si OK
 ```
@@ -921,7 +913,7 @@ cron:
 Métrique : Taux de lettrage automatique
 ├─ Objectif : >= 90% (score >= 80)
 ├─ Threshold alerte : < 80%
-├─ Action : investigate (changement pattern transactions Swan ?)
+├─ Action : investigate (changement pattern transactions Indy, ou interface change)
 
 Métrique : Montant non-lettré par mois
 ├─ Seuil critique : > 10% du CA mensuel
@@ -932,9 +924,9 @@ Métrique : Temps resolution A_VERIFIER
 ├─ Seuil alerte : > 3 jours
 ├─ Action : Email Jules "X suggestions oubliées"
 
-Métrique : Erreurs API Swan
+Métrique : Erreurs scraping Indy
 ├─ Seuil critique : > 5 erreurs par jour
-├─ Action : log + alerter support
+├─ Action : log + alerter support (possible changement interface Indy)
 ```
 
 ---
@@ -980,15 +972,13 @@ class MatchingAction(str, Enum):
 
 @dataclass
 class Transaction:
-    """Représente une transaction bancaire Swan importée."""
+    """Représente une transaction bancaire Indy importée."""
     id: str
     montant: float
     devise: str = "EUR"
     date_valeur: date = field(default_factory=date.today)
-    date_comptable: date = field(default_factory=date.today)
     libelle: str = ""
-    counterparty: str = ""
-    status: str = "BOOKED"
+    status: str = "DOWNLOADED"
 
     def is_credit(self) -> bool:
         """Vérifier que c'est un crédit (pas débit)."""
@@ -1046,8 +1036,8 @@ class BankReconciliationService:
 
     WINDOW_DAYS = 5  # ±5 jours autour de la date de soumis
 
-    def __init__(self, swan_client, sheets_adapter):
-        self.swan_client = swan_client
+    def __init__(self, indy_client, sheets_adapter):
+        self.indy_client = indy_client
         self.sheets = sheets_adapter
 
     async def reconcile_all(self) -> dict:
@@ -1056,9 +1046,9 @@ class BankReconciliationService:
         """
         logger.info("Starting bank reconciliation")
 
-        # Étape 1 : Importer transactions Swan
-        transactions = await self.import_swan_transactions()
-        logger.info(f"Imported {len(transactions)} transactions from Swan")
+        # Étape 1 : Importer transactions Indy
+        transactions = await self.import_indy_transactions()
+        logger.info(f"Imported {len(transactions)} transactions from Indy")
 
         # Étape 2 : Récupérer factures PAYE
         factures_paye = self.get_factures_with_status("PAYE")
@@ -1084,17 +1074,19 @@ class BankReconciliationService:
             "no_match": sum(1 for r in results if r.status == LettragStatus.PAS_DE_MATCH)
         }
 
-    async def import_swan_transactions(self) -> List[Transaction]:
-        """Récupère les transactions Swan des 30 derniers jours."""
-        account_id = self.sheets.get_swan_account_id()
+    async def import_indy_transactions(self) -> List[Transaction]:
+        """Récupère les transactions Indy des 30 derniers jours via scraping."""
+        indy_username = self.sheets.get_indy_username()
+        indy_password = self.sheets.get_indy_password()
 
         try:
-            transactions = await self.swan_client.get_transactions(
-                account_id=account_id,
+            transactions = await self.indy_client.get_transactions(
+                username=indy_username,
+                password=indy_password,
                 days_back=30
             )
         except Exception as e:
-            logger.error(f"Swan import failed: {e}", exc_info=True)
+            logger.error(f"Indy import failed: {e}", exc_info=True)
             transactions = []
 
         # Filter : crédits URSSAF uniquement
@@ -1299,7 +1291,7 @@ class ManualValidationHandler:
 
 ### Fonctionnalités clés
 
-- [x] Import automatique transactions Swan (GraphQL, pagination)
+- [x] Import automatique transactions Indy (Playwright scraping)
 - [x] Algorithme scoring à 3 critères (montant, date, libellé)
 - [x] Lettrage auto pour score >= 80
 - [x] Suggestions pour 50 <= score < 80
@@ -1315,7 +1307,7 @@ class ManualValidationHandler:
 | Fichier | Type | Contenu |
 |---------|------|---------|
 | `app/services/bank_reconciliation.py` | Feature | BankReconciliationService + matching |
-| `app/clients/swan_client.py` | Integration | SwanClient GraphQL |
+| `app/clients/indy_client.py` | Integration | IndyClient Playwright scraping |
 | `app/routers/reconciliation.py` | API | Endpoints valider/ignorer/forcer |
 | `app/sheets_adapter.py` | Adapter | Append Lettrage, update Balances |
 | `app/tasks/cron_reconcile.py` | Cron | Task APScheduler |
@@ -1323,7 +1315,7 @@ class ManualValidationHandler:
 
 ### Next Steps
 
-1. **Implémenter SwanClient** (GraphQL queries, error handling)
+1. **Implémenter IndyClient** (Playwright scraping, CSV parsing, error handling)
 2. **Coder BankReconciliationService** (matching algorithm)
 3. **Créer endpoints FastAPI** (validate, ignore, force)
 4. **Setup cron job** (APScheduler, logging)
@@ -1334,7 +1326,8 @@ class ManualValidationHandler:
 
 ---
 
-**Document version**: 1.0
+**Document version**: 1.1
 **Auteur**: Sarah, BMAD Product Owner
 **Date**: Mars 2026
-**Statut**: Specification complète, prête pour Phase 2
+**Statut**: Specification complète, mise à jour Swan→Indy Playwright
+**Mise à jour**: Remplacement Swan GraphQL API par Indy Playwright scraping (pas d'accès API disponible)
