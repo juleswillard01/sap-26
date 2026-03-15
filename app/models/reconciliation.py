@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
-class MatchConfidence(StrEnum):
-    """Confidence level for reconciliation matches."""
-
-    AUTO = "AUTO"  # 100% match on amount and reference
-    MANUAL = "MANUAL"  # User-validated match
+# Python 3.10 compatible string literal type for confidence level
+MatchConfidence = Literal["AUTO", "MANUAL"]
 
 
 class ReconciliationMatch(BaseModel):
@@ -22,7 +18,7 @@ class ReconciliationMatch(BaseModel):
     transaction_id: str = Field(description="Swan transaction ID")
     montant: float = Field(gt=0, description="Matched amount in EUR")
     matched_at: datetime = Field(default_factory=datetime.utcnow, description="Match timestamp")
-    confidence: MatchConfidence = Field(default=MatchConfidence.AUTO, description="Confidence level")
+    confidence: MatchConfidence = Field(default="AUTO", description="Confidence level")
 
     class Config:
         """Pydantic model configuration."""

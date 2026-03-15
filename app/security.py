@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException, Request
-from fastapi.security import HTTPAuthCredentials, HTTPBearer
+from fastapi.security import HTTPBearer
 
 from app.config import Settings
 
@@ -32,7 +32,7 @@ bearer_scheme = HTTPBearer()
 
 
 async def verify_api_key(
-    credentials: HTTPAuthCredentials = HTTPBearer(),
+    credentials: HTTPAuthorizationCredentials = HTTPBearer(),
     settings: Settings = None,  # Injected by FastAPI dependency
 ) -> str:
     """

@@ -104,7 +104,7 @@ class InvoiceService:
             client_id=request.client_id,
             items=request.items,
             montant_total=request.montant_total,
-            status=InvoiceStatus.DRAFT,
+            status="DRAFT",
             date_emission=request.date_emission,
             date_due=request.date_due,
             created_at=datetime.utcnow(),
@@ -145,11 +145,11 @@ class InvoiceService:
         # Filter by status if provided
         if status:
             status_map = {
-                InvoiceStatus.DRAFT: "BROUILLON",
-                InvoiceStatus.SUBMITTED: "SOUMIS",
-                InvoiceStatus.VALIDATED: "VALIDE",
-                InvoiceStatus.PAID: "PAYE",
-                InvoiceStatus.CANCELLED: "ANNULE",
+                "DRAFT": "BROUILLON",
+                "SUBMITTED": "SOUMIS",
+                "VALIDATED": "VALIDE",
+                "PAID": "PAYE",
+                "CANCELLED": "ANNULE",
             }
             invoice_rows = [row for row in invoice_rows if row.statut == status_map.get(status)]
 
@@ -218,7 +218,7 @@ class InvoiceService:
         current = self.get_invoice(invoice_id)
 
         # Check it's a draft
-        if current.status != InvoiceStatus.DRAFT:
+        if current.status != "DRAFT":
             logger.warning(f"Cannot update invoice {invoice_id}: status is {current.status}, not DRAFT")
             raise ValueError(f"Cannot update invoice {invoice_id}: only DRAFT invoices can be updated")
 
@@ -266,7 +266,7 @@ class InvoiceService:
         current = self.get_invoice(invoice_id)
 
         # Check it's a draft
-        if current.status != InvoiceStatus.DRAFT:
+        if current.status != "DRAFT":
             logger.warning(f"Cannot delete invoice {invoice_id}: status is {current.status}, not DRAFT")
             raise ValueError(f"Cannot delete invoice {invoice_id}: only DRAFT invoices can be deleted")
 
@@ -303,18 +303,18 @@ class InvoiceService:
             Invoice DTO for API responses
         """
         status_map = {
-            "BROUILLON": InvoiceStatus.DRAFT,
-            "SOUMIS": InvoiceStatus.SUBMITTED,
-            "VALIDE": InvoiceStatus.VALIDATED,
-            "PAYE": InvoiceStatus.PAID,
-            "ANNULE": InvoiceStatus.CANCELLED,
+            "BROUILLON": "DRAFT",
+            "SOUMIS": "SUBMITTED",
+            "VALIDE": "VALIDATED",
+            "PAYE": "PAID",
+            "ANNULE": "CANCELLED",
             # Other statuses map to closest match
-            "CREE": InvoiceStatus.SUBMITTED,
-            "EN_ATTENTE": InvoiceStatus.SUBMITTED,
-            "RAPPROCHE": InvoiceStatus.PAID,
-            "ERREUR": InvoiceStatus.DRAFT,
-            "EXPIRE": InvoiceStatus.CANCELLED,
-            "REJETE": InvoiceStatus.CANCELLED,
+            "CREE": "SUBMITTED",
+            "EN_ATTENTE": "SUBMITTED",
+            "RAPPROCHE": "PAID",
+            "ERREUR": "DRAFT",
+            "EXPIRE": "CANCELLED",
+            "REJETE": "CANCELLED",
         }
 
         return Invoice(
@@ -322,7 +322,7 @@ class InvoiceService:
             client_id=row.client_id,
             items=[],  # TODO: Parse items from description or separate sheet
             montant_total=row.montant_total,
-            status=status_map.get(row.statut, InvoiceStatus.DRAFT),
+            status=status_map.get(row.statut, "DRAFT"),
             date_emission=None,  # TODO: Extract from date_debut
             date_due=None,  # TODO: Calculate based on payment terms
             created_at=datetime.utcnow(),

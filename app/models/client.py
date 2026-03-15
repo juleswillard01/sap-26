@@ -3,19 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, EmailStr, Field
 
-
-class URSSAFStatus(StrEnum):
-    """URSSAF registration status."""
-
-    NOT_REGISTERED = "NOT_REGISTERED"
-    PENDING = "PENDING"
-    ACTIVE = "ACTIVE"
-    ERROR = "ERROR"
+# Python 3.10 compatible string literal type for status
+URSSAFStatus = Literal["NOT_REGISTERED", "PENDING", "ACTIVE", "ERROR"]
 
 
 class Client(BaseModel):
@@ -32,7 +26,7 @@ class Client(BaseModel):
 
     # URSSAF integration
     urssaf_id: str | None = Field(None, description="URSSAF registration ID")
-    urssaf_status: URSSAFStatus = Field(default=URSSAFStatus.NOT_REGISTERED, description="URSSAF status")
+    urssaf_status: URSSAFStatus = Field(default="NOT_REGISTERED", description="URSSAF status")
     date_urssaf_registration: datetime | None = Field(None, description="URSSAF registration date")
 
     # Metadata

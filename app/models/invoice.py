@@ -3,20 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from enum import StrEnum
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-
-class InvoiceStatus(StrEnum):
-    """Invoice lifecycle status."""
-
-    DRAFT = "DRAFT"  # Created, not submitted
-    SUBMITTED = "SUBMITTED"  # Submitted to URSSAF, waiting validation
-    VALIDATED = "VALIDATED"  # Validated by URSSAF, payment pending
-    PAID = "PAID"  # Payment received and reconciled
-    CANCELLED = "CANCELLED"  # Cancelled or refunded
+# Python 3.10 compatible string literal type for invoice status
+InvoiceStatus = Literal["DRAFT", "SUBMITTED", "VALIDATED", "PAID", "CANCELLED"]
 
 
 class InvoiceLineItem(BaseModel):
@@ -52,7 +45,7 @@ class Invoice(BaseModel):
     montant_total: float = Field(gt=0, le=100000, description="Total invoice amount in EUR")
 
     # Status tracking
-    status: InvoiceStatus = Field(default=InvoiceStatus.DRAFT, description="Invoice status")
+    status: InvoiceStatus = Field(default="DRAFT", description="Invoice status")
     date_emission: date = Field(description="Emission date")
     date_due: date | None = Field(None, description="Due date (auto: emission + 30j)")
 

@@ -27,7 +27,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import gspread
@@ -251,7 +251,7 @@ class SheetsAdapter:
             return False
 
         entry = self._cache[cache_key]
-        elapsed = (datetime.now(UTC) - entry.cached_at.replace(tzinfo=UTC)).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - entry.cached_at.replace(tzinfo=timezone.utc)).total_seconds()
         is_valid = elapsed < self.cache_ttl_seconds
 
         if not is_valid:
@@ -323,15 +323,18 @@ class SheetsAdapter:
             # Cache the raw data for next retrieve
             self._cache[cache_key] = CacheEntry(
                 data={"rows": [client.model_dump() for client in clients]},
-                cached_at=datetime.now(UTC),
+                cached_at=datetime.now(timezone.utc),
             )
 
             logger.info(f"Fetched {len(clients)} clients from Sheets")
             return clients
 
-        except Exception as e:
+        except GSpreadException as e:
             logger.error(f"Error fetching clients: {e}")
-            raise
+            raise ValueError(f"Failed to fetch clients: {e}") from e
+        except Exception as e:
+            logger.error(f"Unexpected error fetching clients: {e}")
+            raise ValueError(f"Failed to fetch clients: {e}") from e
 
     def create_client(self, client: ClientRow) -> ClientRow:
         """
@@ -403,9 +406,7 @@ class SheetsAdapter:
             col_map = {header: col_num + 1 for col_num, header in enumerate(self.CLIENTS_HEADERS)}
             for field, value in updates.items():
                 if field in col_map:
-                    gspread.utils.a1_range_to_grid_range(
-                        f"{gspread.utils.rowcol_to_a1(row_idx, col_map[field])}"
-                    )
+                    gspread.utils.a1_range_to_grid_range(f"{gspread.utils.rowcol_to_a1(row_idx, col_map[field])}")
                     ws.update_cell(row_idx, col_map[field], value)
 
             self._clear_cache(self.SHEET_CLIENTS)
@@ -456,7 +457,7 @@ class SheetsAdapter:
 
             self._cache[cache_key] = CacheEntry(
                 data={"rows": [inv.model_dump() for inv in invoices]},
-                cached_at=datetime.now(UTC),
+                cached_at=datetime.now(timezone.utc),
             )
 
             logger.info(f"Fetched {len(invoices)} invoices from Sheets")
@@ -585,7 +586,7 @@ class SheetsAdapter:
 
             self._cache[cache_key] = CacheEntry(
                 data={"rows": [txn.model_dump() for txn in transactions]},
-                cached_at=datetime.now(UTC),
+                cached_at=datetime.now(timezone.utc),
             )
 
             logger.info(f"Fetched {len(transactions)} transactions from Sheets")
@@ -657,7 +658,7 @@ class SheetsAdapter:
                 "no_matches": sum(1 for r in all_records if r.get("statut") == "PAS_DE_MATCH"),
             }
 
-            self._cache[cache_key] = CacheEntry(data=summary, cached_at=datetime.now(UTC))
+            self._cache[cache_key] = CacheEntry(data=summary, cached_at=datetime.now(timezone.utc))
             return summary
 
         except Exception as e:
@@ -683,7 +684,7 @@ class SheetsAdapter:
             # Return latest (last row)
             latest = all_records[-1] if all_records else {}
 
-            self._cache[cache_key] = CacheEntry(data=latest, cached_at=datetime.now(UTC))
+            self._cache[cache_key] = CacheEntry(data=latest, cached_at=datetime.now(timezone.utc))
             return latest
 
         except Exception as e:
@@ -714,7 +715,7 @@ class SheetsAdapter:
 
             data = {"all": all_records, "latest": all_records[-1] if all_records else {}}
 
-            self._cache[cache_key] = CacheEntry(data=data, cached_at=datetime.now(UTC))
+            self._cache[cache_key] = CacheEntry(data=data, cached_at=datetime.now(timezone.utc))
 
             if trimestre is None:
                 return data["latest"]
