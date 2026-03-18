@@ -7,13 +7,13 @@ requires:
   experimental_flag: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 source_of_truth: docs/schemas/SCHEMAS.html
 locked_decisions:
-  D1: "CLI-first interface"
-  D2: "FastAPI secondary (JSON APIs for future)"
-  D3: "Google Sheets backend for all data"
-  D4: "Single-user (Jules) only"
-  D5: "Indy Playwright for bank export (no Swan API)"
-  D6: "Manual bank reconciliation (no auto-match)"
-  D7: "PDF invoice export priority"
+  D1: "polling 4h"
+  D2: "SMTP SAP-Facture"
+  D3: "CREE→EN_ATTENTE immédiat"
+  D4: "CLI first"
+  D5: "Indy Playwright"
+  D6: "lettrage manuel MVP"
+  D7: "PDF priorité Google Drive"
 
 global:
   output_directory: docs/bmad/deliverables
@@ -54,13 +54,13 @@ teams:
         Source de vérité absolue: docs/schemas/SCHEMAS.html
 
         Décisions verrouillées:
-        - D1: CLI-first
-        - D2: FastAPI secondary
-        - D3: Google Sheets backend
-        - D4: Single-user (Jules)
-        - D5: Indy Playwright (no Swan)
-        - D6: Manual reconciliation
-        - D7: PDF priority
+        - D1: polling 4h
+        - D2: SMTP SAP-Facture
+        - D3: CREE→EN_ATTENTE immédiat
+        - D4: CLI first
+        - D5: Indy Playwright
+        - D6: lettrage manuel MVP
+        - D7: PDF priorité Google Drive
 
         Tu commandes une équipe de 2 coéquipiers:
         1. product-owner — produit le PRD HTML
@@ -259,7 +259,7 @@ teams:
   # =========================================================================
   # TEAM 3: Sprint Planning
   # =========================================================================
-  team_3_planning:
+  team_3_sprint:
     id: sap-planning
     name: "Team 3: Sprint Planning"
     phase: 3
@@ -361,12 +361,12 @@ teams:
   # =========================================================================
   # TEAM 4: Development (Party Mode)
   # =========================================================================
-  team_4_development:
+  team_4_dev:
     id: sap-dev
     name: "Team 4: Development (Party Mode)"
     phase: 4
     sequence_order: 4
-    depends_on: [team_3_planning]
+    depends_on: [team_3_sprint]
     description: |
       Multiple developers work in parallel.
       One story per developer, max 5 parallel developers.
@@ -376,6 +376,7 @@ teams:
       model: sonnet
       instructions: |
         Tu es le LEAD de Team 4: Development (Party Mode).
+        NOTE: The lead agent "developer" is developer-1 (first developer instance).
 
         Ingestion:
         - Lis 06-sprint-board.html (stories + sprints)
@@ -524,7 +525,7 @@ teams:
     name: "Team 5: Code Review (Opus)"
     phase: 5
     sequence_order: 5
-    depends_on: [team_4_development]
+    depends_on: [team_4_dev]
     description: |
       Senior Opus review against SCHEMAS.html, security, performance.
       This is BLOCKING and required before merge to main.
@@ -679,13 +680,13 @@ quality_gates:
     blocking: false
 
   gate_3_story_completeness:
-    team: team_3_planning
+    team: team_3_sprint
     trigger: task-completed
     hook_file: bmad/workflows/hooks/task-completed.sh
     blocking: false
 
   gate_4_code_quality:
-    team: team_4_development
+    team: team_4_dev
     trigger: task-completed
     hook_file: bmad/workflows/hooks/task-completed.sh
     blocking: true

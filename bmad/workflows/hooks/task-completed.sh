@@ -80,7 +80,7 @@ grep_pattern() {
     local flags="${3:--i}"  # default case-insensitive
 
     if [[ -f "$file" ]]; then
-        grep $flags "$pattern" "$file" >/dev/null 2>&1
+        grep ${flags} -- "$pattern" "$file" >/dev/null 2>&1
         return $?
     fi
     return 1

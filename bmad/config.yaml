@@ -1,20 +1,424 @@
-# BMAD Method v6 - Project Configuration
-# Created during workflow-init
+# SAP-Facture BMAD Configuration v2.0 — Agent Teams Architecture
+# Orchestration via Claude Code experimental Agent Teams feature
+# Source of Truth: docs/schemas/SCHEMAS.html
 
-project_name: "SAP-Facture"
-project_type: "web-app"
-project_level: 2
+###############################################################################
+# PROJECT METADATA
+###############################################################################
+project:
+  name: "SAP-Facture"
+  type: "cli-first-web-app"
+  description: "URSSAF-native billing automation for micro-entrepreneurs"
+  owner: "Jules Willard"
+  source_of_truth: "docs/schemas/SCHEMAS.html"
 
-# Output folder (relative to project root)
-output_folder: "docs"
+###############################################################################
+# ARCHITECTURE DECISIONS (LOCKED)
+###############################################################################
+decisions:
+  D1: { value: "polling 4h", locked: true, date: "2026-03-18" }
+  D2: { value: "SMTP SAP-Facture", locked: true, date: "2026-03-18" }
+  D3: { value: "CREE→EN_ATTENTE immédiat", locked: true, date: "2026-03-18" }
+  D4: { value: "CLI first", locked: true, date: "2026-03-18" }
+  D5: { value: "Indy Playwright", locked: true, date: "2026-03-18" }
+  D6: { value: "lettrage manuel MVP", locked: true, date: "2026-03-18" }
+  D7: { value: "PDF priorité Google Drive", locked: true, date: "2026-03-18" }
 
-# Module-specific settings
-bmm:
-  workflow_status_file: "docs/bmm-workflow-status.yaml"
-  sprint_status_file: "docs/sprint-status.yaml"
+###############################################################################
+# AGENT TEAMS CONFIGURATION
+###############################################################################
+architecture: agent-teams  # v2.0: real agent teams via Claude Code CLI
 
-# Path configuration
+teams:
+  count: 5
+  total_agents: 13
+  max_concurrent: 10
+  definitions_dir: bmad/agents
+
+  roster:
+    team_1_analysis:
+      lead: analyst
+      teammates: [product-owner, ux-designer]
+      size: 3
+      phase: analysis
+      duration_days: 5
+
+    team_2_architecture:
+      lead: architect
+      teammates: [qa-tester]
+      size: 2
+      phase: architecture
+      duration_days: 3
+
+    team_3_sprint:
+      lead: scrum-master
+      teammates: []
+      size: 1
+      phase: sprint-setup
+      duration_days: 1
+
+    team_4_dev:
+      lead: developer
+      teammates: [developer, developer, developer, developer]
+      size: 5
+      phase: development
+      duration_days: 14
+      iterative: true
+
+    team_5_review:
+      lead: reviewer
+      teammates: []
+      size: 1
+      phase: review
+      duration_days: 3
+
+models:
+  default: sonnet
+  review: opus
+  subagent: haiku
+  routing:
+    analyst: sonnet
+    product-owner: sonnet
+    ux-designer: sonnet
+    architect: sonnet
+    qa-tester: sonnet
+    scrum-master: sonnet
+    developer: sonnet
+    reviewer: opus
+
+###############################################################################
+# WORKFLOW CONFIGURATION
+###############################################################################
+workflows:
+  pipeline_file: "bmad/workflows/sap-facture-pipeline.yaml"
+  quality_gates_file: "bmad/workflows/quality-gates.yaml"
+
+  # Team-based phases; teams spawn in sequence
+  phases:
+    - name: "analysis"
+      team: "team_1_analysis"
+      duration_days: 5
+      outputs: ["analysis-report.html", "prd.html", "ui-spec.html"]
+
+    - name: "architecture"
+      team: "team_2_architecture"
+      duration_days: 3
+      outputs: ["architecture.md", "api-spec.yaml", "data-model.sql"]
+
+    - name: "sprint-setup"
+      team: "team_3_sprint"
+      duration_days: 1
+      outputs: ["sprint-plan.md", "task-breakdown.md"]
+
+    - name: "development"
+      team: "team_4_dev"
+      duration_days: 14
+      iterative: true
+      outputs: ["feature-branch", "test-suite"]
+
+    - name: "review"
+      team: "team_5_review"
+      duration_days: 3
+      iterations_max: 3
+      outputs: ["review-report.md", "approval-decision"]
+
+###############################################################################
+# TEMPLATES & DELIVERABLES
+###############################################################################
+templates:
+  dir: "bmad/templates"
+  output_dir: "docs/bmad/deliverables"
+
+  types:
+    - name: "prd-template"
+      file: "bmad/templates/prd-template.html"
+      format: "interactive-html"
+
+    - name: "architecture-template"
+      file: "bmad/templates/architecture-template.md"
+      format: "markdown"
+
+    - name: "sprint-template"
+      file: "bmad/templates/sprint-template.md"
+      format: "markdown"
+
+    - name: "test-plan-template"
+      file: "bmad/templates/test-plan-template.md"
+      format: "markdown"
+
+    - name: "review-template"
+      file: "bmad/templates/review-template.md"
+      format: "markdown"
+
+    - name: "review-report-template"
+      file: "bmad/templates/review-report-template.html"
+      format: "interactive-html"
+
+###############################################################################
+# QUALITY GATES & HOOKS
+###############################################################################
+quality:
+  coverage_min: 80
+  lint: "ruff check --fix && ruff format"
+  typecheck: "mypy --strict"
+
+  hooks:
+    teammate_idle: "bmad/workflows/hooks/teammate-idle.sh"
+    task_completed: "bmad/workflows/hooks/task-completed.sh"
+
+  review_required: true
+  review_max_iterations: 3
+  approval_threshold: "pass"
+
+###############################################################################
+# PROJECT PATHS
+###############################################################################
 paths:
-  docs: "docs"
-  stories: "docs/stories"
-  tests: "tests"
+  agents: bmad/agents/
+  workflows: bmad/workflows/
+  templates: bmad/templates/
+  deliverables: docs/bmad/deliverables/
+  stories: docs/stories/
+  app: app/
+  tests: tests/
+
+###############################################################################
+# TECHNOLOGY STACK
+###############################################################################
+stack:
+  # Runtime
+  python_version: "3.11+"
+  python_models: "pydantic-v2"
+
+  # Web Framework
+  web_framework: "FastAPI"
+  cli_framework: "Click"
+  async_runtime: "asyncio"
+
+  # Data & Storage
+  database: "Google Sheets API v4"
+  orm: "None (Sheets + Pydantic)"
+  cache: "Redis (optional Phase 2)"
+
+  # Document Generation
+  pdf_engine: "WeasyPrint"
+  pdf_rendering: "Chromium (via WeasyPrint)"
+  cloud_storage: "Google Drive API v3"
+
+  # Banking & Automation
+  browser_automation: "Playwright"
+  banking_api: "Indy (via Playwright scraping)"
+  email_transport: "aiosmtplib"
+
+  # Quality & Testing
+  test_framework: "pytest"
+  test_async: "pytest-asyncio"
+  test_coverage: "pytest-cov"
+  test_data_factory: "factory-boy"
+  test_time_mocking: "freezegun"
+  code_quality: "ruff"
+  type_checking: "mypy"
+
+  # CI/CD & Deployment
+  ci_platform: "GitHub Actions"
+  container_runtime: "Docker"
+  deployment_target: "VPS (Linux, systemd)"
+  orchestration: "systemd units"
+
+###############################################################################
+# EXTERNAL INTEGRATIONS
+###############################################################################
+integrations:
+  urssaf:
+    api_endpoint: "https://api.urssaf.fr/v1"
+    auth_method: "OAuth2"
+    polling_interval_hours: 4
+    timeout_seconds: 30
+    retry_policy: "exponential backoff, max 3 attempts"
+    rate_limit: "100 req/min"
+    data_freshness_requirement: "6 hours"
+
+  google_sheets:
+    api_version: "v4"
+    rate_limit: "300 requests/minute"
+    batch_size_max: 100
+    quota_warning_threshold: 250  # requests before limit
+    data_validation: "Pydantic"
+
+  google_drive:
+    api_version: "v3"
+    folder_structure: "invoices/{year}/{month}/"
+    retention_days: 2555  # 7 years for tax compliance
+    virus_scan_enabled: true
+
+  indy_bank:
+    scraping_method: "Playwright headless"
+    login_retry_max: 3
+    session_timeout_minutes: 15
+    validation_window_hours: 48
+    reminder_window_hours: 36
+
+  smtp:
+    provider: "SAP-Facture SMTP"
+    port: 587
+    tls_required: true
+    rate_limit: "100 emails/hour"
+    sender_address: "invoices@sap-facture.local"
+
+###############################################################################
+# MONITORING & OBSERVABILITY
+###############################################################################
+monitoring:
+  logging_level: "INFO"
+  log_format: "json"
+  log_destinations:
+    - "stdout"
+    - "file:logs/app.log"
+
+  metrics_enabled: true
+  metrics_backend: "prometheus"
+
+  error_tracking_enabled: true
+  error_tracking_service: "Sentry (optional Phase 2)"
+
+  health_check_interval_seconds: 60
+  alerting_enabled: true
+
+###############################################################################
+# SECURITY & COMPLIANCE
+###############################################################################
+security:
+  # Secrets management
+  secrets_engine: ".env (local), GitHub Secrets (CI/CD)"
+  encryption_method: "Fernet (symmetric)"
+  password_hashing: "bcrypt"
+
+  # Data protection
+  pii_fields: ["client_email", "client_phone", "invoice_items"]
+  data_retention_years: 7  # Tax compliance
+  pii_encryption_enabled: true
+
+  # API security
+  cors_enabled: true
+  cors_origins: ["http://localhost:3000", "https://sap-facture.local"]
+  rate_limiting_enabled: true
+  api_key_rotation_days: 90
+
+  # Audit logging
+  audit_log_enabled: true
+  audit_fields: ["user_id", "action", "resource", "timestamp", "ip_address"]
+
+###############################################################################
+# DEPLOYMENT CONFIGURATION
+###############################################################################
+deployment:
+  environments:
+    - name: "development"
+      url: "http://localhost:8000"
+      database: "local-sheets"
+      features: ["all"]
+
+    - name: "staging"
+      url: "https://staging.sap-facture.local"
+      database: "staging-sheets"
+      features: ["all-except-production"]
+
+    - name: "production"
+      url: "https://sap-facture.local"
+      database: "production-sheets"
+      features: ["production-ready"]
+      backup_enabled: true
+      backup_frequency: "daily"
+
+  container:
+    image_base: "python:3.11-slim"
+    registry: "ghcr.io"
+    multi_stage_build: true
+    non_root_user: "appuser"
+    read_only_filesystem: true
+
+  health_checks:
+    cli_command: "sap-facture health-check"
+    web_endpoint: "/health"
+    interval_seconds: 30
+
+###############################################################################
+# FEATURE FLAGS & ROLLOUT
+###############################################################################
+features:
+  pdf_generation:
+    enabled: true
+    rollout_percentage: 100
+    phase: "MVP"
+
+  google_drive_upload:
+    enabled: true
+    rollout_percentage: 100
+    phase: "MVP"
+
+  indy_scraping:
+    enabled: true
+    rollout_percentage: 100
+    phase: "MVP"
+
+  manual_reconciliation:
+    enabled: true
+    rollout_percentage: 100
+    phase: "MVP"
+
+  web_dashboard:
+    enabled: false
+    rollout_percentage: 0
+    phase: "Phase 2"
+
+  algorithmic_reconciliation:
+    enabled: false
+    rollout_percentage: 0
+    phase: "Phase 2"
+
+  automated_reminders:
+    enabled: false
+    rollout_percentage: 0
+    phase: "Phase 2"
+
+###############################################################################
+# COMMUNICATION & COORDINATION
+###############################################################################
+communication:
+  # Status reporting
+  status_report_frequency: "weekly"
+  status_report_recipients: ["jules@sap-facture.local"]
+  status_report_format: "markdown"
+
+  # Decision documentation
+  decision_log_file: "docs/DECISION_LOG.md"
+  decision_required_fields:
+    - id
+    - title
+    - context
+    - options
+    - decision
+    - rationale
+    - date
+    - owner
+
+  # Change log
+  changelog_file: "CHANGELOG.md"
+  version_scheme: "semver"
+
+###############################################################################
+# RETROSPECTIVE & CONTINUOUS IMPROVEMENT
+###############################################################################
+retrospective:
+  sprint_retrospective_frequency: "weekly"
+  phase_retrospective_frequency: "per-phase"
+
+  metrics_tracked:
+    - "velocity (stories/week)"
+    - "defect_escape_rate"
+    - "code_review_time (hours)"
+    - "test_coverage_percentage"
+    - "deployment_frequency"
+    - "mean_time_to_recovery (hours)"
+
+  improvement_tracking_file: "docs/IMPROVEMENT_LOG.md"

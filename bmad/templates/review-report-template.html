@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAP-Facture — Code Review</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --accent: #38bdf8;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --accent4: #fb923c;
+    --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    text-align: center;
+    padding: 3rem 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  header p { color: var(--muted); font-size: 1.1rem; }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+  nav a:hover {
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.1);
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 2rem 1rem; }
+
+  section {
+    margin-bottom: 3rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  section .section-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  section .section-header .num {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0f172a;
+    font-weight: 800;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+  section h2 { font-size: 1.4rem; font-weight: 700; }
+  section .desc {
+    padding: 1rem 2rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .content {
+    padding: 2rem;
+  }
+  .content h3 {
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+  .content p {
+    margin-bottom: 1rem;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  .summary-card {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .summary-stat {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .summary-stat.pass {
+    border-color: var(--accent3);
+    background: rgba(52, 211, 153, 0.1);
+  }
+
+  .summary-stat.fail {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+  }
+
+  .summary-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .summary-stat.pass .summary-value {
+    color: var(--accent3);
+  }
+
+  .summary-stat.fail .summary-value {
+    color: #dc2626;
+  }
+
+  .summary-label {
+    font-size: 0.9rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+  }
+  th {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.9rem;
+  }
+  td {
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  tr:hover { background: rgba(56, 189, 248, 0.05); }
+
+  .issue-row {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    background: rgba(0,0,0,0.2);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+  }
+
+  .issue-row.critical {
+    border-left-color: #dc2626;
+    background: rgba(220, 38, 38, 0.05);
+  }
+
+  .issue-row.high {
+    border-left-color: #fb923c;
+    background: rgba(249, 115, 22, 0.05);
+  }
+
+  .issue-row.medium {
+    border-left-color: #fbbf24;
+    background: rgba(251, 191, 36, 0.05);
+  }
+
+  .issue-row.low {
+    border-left-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  .issue-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge.critical { background: #dc2626; color: white; }
+  .badge.high { background: #fb923c; color: white; }
+  .badge.medium { background: #fbbf24; color: #0f172a; }
+  .badge.low { background: #38bdf8; color: #0f172a; }
+
+  .issue-title {
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .issue-file {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    margin-bottom: 0.5rem;
+  }
+
+  .issue-description {
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .issue-suggestion {
+    background: rgba(56,189,248,0.1);
+    border-left: 2px solid var(--accent);
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-style: italic;
+  }
+
+  .alignment-check {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+
+  .check-item {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .check-item.pass {
+    border-color: var(--accent3);
+    background: rgba(52, 211, 153, 0.1);
+  }
+
+  .check-item.fail {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+  }
+
+  .check-icon {
+    font-size: 1.5rem;
+    color: var(--accent3);
+    flex-shrink: 0;
+  }
+
+  .check-item.fail .check-icon {
+    color: #dc2626;
+  }
+
+  .check-label {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  .recommendations {
+    background: rgba(167,139,250,0.1);
+    border: 1px solid var(--accent2);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .recommendations h4 {
+    color: var(--accent2);
+    margin-bottom: 1rem;
+    font-size: 1rem;
+  }
+
+  .recommendations ol {
+    margin-left: 1.5rem;
+  }
+
+  .recommendations li {
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Code Review Report — SAP-Facture</h1>
+  <p>Quality Assessment & Findings</p>
+</header>
+
+<nav>
+  <a href="#summary">1. Summary</a>
+  <a href="#issues">2. Issues Found</a>
+  <a href="#schemas">3. SCHEMAS Alignment</a>
+  <a href="#coverage">4. Coverage</a>
+  <a href="#security">5. Security</a>
+  <a href="#recommendations">6. Recommendations</a>
+</nav>
+
+<main>
+
+<section id="summary">
+  <div class="section-header"><div class="num">1</div><h2>Review Summary</h2></div>
+  <div class="desc">Vue globale des resultats de revue et du verdict final.</div>
+  <div class="content">
+    <div class="summary-card">
+      <div class="summary-stat {{OVERALL_VERDICT_CLASS}}">
+        <div class="summary-value">{{OVERALL_VERDICT}}</div>
+        <div class="summary-label">Overall Status</div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-value">{{REVIEW_SCORE}}</div>
+        <div class="summary-label">Review Score (0-100)</div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-value">{{BLOCKER_COUNT}}</div>
+        <div class="summary-label">Blockers</div>
+      </div>
+      <div class="summary-stat">
+        <div class="summary-value">{{CRITICAL_COUNT}}</div>
+        <div class="summary-label">Critical Issues</div>
+      </div>
+    </div>
+
+    <h3>Summary Comment</h3>
+    <p>{{REVIEW_SUMMARY}}</p>
+  </div>
+</section>
+
+<section id="issues">
+  <div class="section-header"><div class="num">2</div><h2>Issues Found</h2></div>
+  <div class="desc">Liste complete des problemes identifies, triee par severite.</div>
+  <div class="content">
+    <h3>Critical Issues (Blocker)</h3>
+    {{CRITICAL_ISSUES}}
+
+    <h3>High Priority Issues</h3>
+    {{HIGH_ISSUES}}
+
+    <h3>Medium Priority Issues</h3>
+    {{MEDIUM_ISSUES}}
+
+    <h3>Low Priority Issues</h3>
+    {{LOW_ISSUES}}
+
+    <p style="margin-top: 1.5rem; color: var(--muted); font-size: 0.9rem;">
+      <strong>Legend:</strong> CRITICAL = must fix before merge | HIGH = should fix | MEDIUM = nice to fix | LOW = polish
+    </p>
+  </div>
+</section>
+
+<section id="schemas">
+  <div class="section-header"><div class="num">3</div><h2>SCHEMAS.html Alignment</h2></div>
+  <div class="desc">Verification de l'alignment avec la source de verite SCHEMAS.html.</div>
+  <div class="content">
+    <h3>Alignment Checklist</h3>
+    <div class="alignment-check">
+      <div class="check-item {{ARCHITECTURE_ALIGNMENT_CLASS}}">
+        <div class="check-icon">{{ARCHITECTURE_ALIGNMENT_ICON}}</div>
+        <div class="check-label">Architecture matches SCHEMAS</div>
+      </div>
+      <div class="check-item {{DATA_MODEL_ALIGNMENT_CLASS}}">
+        <div class="check-icon">{{DATA_MODEL_ALIGNMENT_ICON}}</div>
+        <div class="check-label">Data model matches SCHEMAS</div>
+      </div>
+      <div class="check-item {{API_INTEGRATION_CLASS}}">
+        <div class="check-icon">{{API_INTEGRATION_ICON}}</div>
+        <div class="check-label">API integrations match SCHEMAS</div>
+      </div>
+      <div class="check-item {{STATE_MACHINE_CLASS}}">
+        <div class="check-icon">{{STATE_MACHINE_ICON}}</div>
+        <div class="check-label">State machines match SCHEMAS</div>
+      </div>
+      <div class="check-item {{NAMING_CONVENTIONS_CLASS}}">
+        <div class="check-icon">{{NAMING_CONVENTIONS_ICON}}</div>
+        <div class="check-label">Naming conventions consistent</div>
+      </div>
+      <div class="check-item {{TERMINOLOGY_CLASS}}">
+        <div class="check-icon">{{TERMINOLOGY_ICON}}</div>
+        <div class="check-label">Business terminology aligned</div>
+      </div>
+    </div>
+
+    <h3>Detailed Alignment Notes</h3>
+    <p>{{SCHEMAS_ALIGNMENT_NOTES}}</p>
+  </div>
+</section>
+
+<section id="coverage">
+  <div class="section-header"><div class="num">4</div><h2>Code Coverage Report</h2></div>
+  <div class="desc">Analyse de la couverture de tests.</div>
+  <div class="content">
+    <table>
+      <thead>
+        <tr>
+          <th>Module</th>
+          <th>Lines</th>
+          <th>Covered</th>
+          <th>%</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{COVERAGE_DATA}}
+      </tbody>
+    </table>
+
+    <h3>Coverage Summary</h3>
+    <p>{{COVERAGE_SUMMARY}}</p>
+  </div>
+</section>
+
+<section id="security">
+  <div class="section-header"><div class="num">5</div><h2>Security Findings</h2></div>
+  <div class="desc">Resultats de l'audit securite et vulnerabilites identifiees.</div>
+  <div class="content">
+    <h3>Security Scan Results</h3>
+    <p>{{SECURITY_SCAN_SUMMARY}}</p>
+
+    <h3>Vulnerabilities</h3>
+    <div style="margin: 1rem 0;">
+      {{SECURITY_VULNERABILITIES}}
+    </div>
+
+    <h3>Security Best Practices</h3>
+    <ul style="margin-left: 1.5rem;">
+      <li>{{SECURITY_PRACTICE_1}}</li>
+      <li>{{SECURITY_PRACTICE_2}}</li>
+      <li>{{SECURITY_PRACTICE_3}}</li>
+    </ul>
+  </div>
+</section>
+
+<section id="recommendations">
+  <div class="section-header"><div class="num">6</div><h2>Recommendations & Next Steps</h2></div>
+  <div class="desc">Actions recommandees avant production.</div>
+  <div class="content">
+    <div class="recommendations">
+      <h4>Before Merge</h4>
+      <ol>
+        <li>{{BEFORE_MERGE_1}}</li>
+        <li>{{BEFORE_MERGE_2}}</li>
+        <li>{{BEFORE_MERGE_3}}</li>
+      </ol>
+    </div>
+
+    <div class="recommendations" style="margin-top: 1rem; background: rgba(52,211,153,0.1); border-color: var(--accent3);">
+      <h4 style="color: var(--accent3);">Before Production</h4>
+      <ol>
+        <li>{{BEFORE_PROD_1}}</li>
+        <li>{{BEFORE_PROD_2}}</li>
+        <li>{{BEFORE_PROD_3}}</li>
+      </ol>
+    </div>
+
+    <h3 style="margin-top: 2rem;">Reviewer Sign-Off</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Reviewer</th>
+          <th>Status</th>
+          <th>Comments</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{REVIEWER_1_NAME}}</td>
+          <td><span class="badge {{REVIEWER_1_STATUS_CLASS}}">{{REVIEWER_1_STATUS}}</span></td>
+          <td>{{REVIEWER_1_COMMENTS}}</td>
+          <td>{{REVIEWER_1_DATE}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>SAP-Facture — BMAD Pipeline — Code Review Template — Generated {{DATE}}</footer>
+
+</body>
+</html>

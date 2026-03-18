@@ -17,7 +17,7 @@ set -euo pipefail
 # CONFIGURATION
 # ============================================================================
 
-PROJECT_ROOT="/home/julius/Documents/3-git/SAP/main"
+PROJECT_ROOT="/home/jules/Documents/3-git/SAP/main"
 DELIVERABLES_DIR="docs/bmad/deliverables"
 STORIES_DIR="docs/stories"
 
@@ -182,26 +182,27 @@ check_phase_5() {
 # ============================================================================
 
 main() {
+    local result=0
     case "$PHASE_NUMBER" in
         1)
             check_phase_1
-            local result=$?
+            result=$?
             ;;
         2)
             check_phase_2
-            local result=$?
+            result=$?
             ;;
         3)
             check_phase_3
-            local result=$?
+            result=$?
             ;;
         4)
             check_phase_4
-            local result=$?
+            result=$?
             ;;
         5)
             check_phase_5
-            local result=$?
+            result=$?
             ;;
         *)
             log_error "Unknown phase: $PHASE_NUMBER"

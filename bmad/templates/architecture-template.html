@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAP-Facture — Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --accent: #38bdf8;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --accent4: #fb923c;
+    --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    text-align: center;
+    padding: 3rem 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  header p { color: var(--muted); font-size: 1.1rem; }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+  nav a:hover {
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.1);
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 2rem 1rem; }
+
+  section {
+    margin-bottom: 3rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  section .section-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  section .section-header .num {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0f172a;
+    font-weight: 800;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+  section h2 { font-size: 1.4rem; font-weight: 700; }
+  section .desc {
+    padding: 1rem 2rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .content {
+    padding: 2rem;
+  }
+  .content h3 {
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+  .content p {
+    margin-bottom: 1rem;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .content ul, .content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .content li {
+    margin-bottom: 0.5rem;
+    color: var(--text);
+  }
+
+  .tech-badge {
+    display: inline-block;
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .tech-badge.backend { background: rgba(34, 197, 94, 0.15); border-color: var(--accent3); color: var(--accent3); }
+  .tech-badge.frontend { background: rgba(168, 139, 250, 0.15); border-color: var(--accent2); color: var(--accent2); }
+  .tech-badge.external { background: rgba(249, 115, 22, 0.15); border-color: var(--accent4); color: var(--accent4); }
+
+  .terminal {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: #00ff00;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  .terminal .cmd { color: #00ff00; }
+  .terminal .comment { color: #888; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+  }
+  th {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.9rem;
+  }
+  td {
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  tr:hover { background: rgba(56, 189, 248, 0.05); }
+
+  .diagram-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+  }
+  .diagram-toolbar button {
+    background: var(--border);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .diagram-toolbar button:hover {
+    background: var(--accent);
+    color: #0f172a;
+  }
+  .diagram-toolbar .zoom-level {
+    color: var(--muted);
+    font-size: 0.8rem;
+    min-width: 3rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .diagram-toolbar .spacer { flex: 1; }
+  .diagram-toolbar .hint {
+    color: var(--muted);
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+
+  .diagram-viewport {
+    overflow: hidden;
+    position: relative;
+    min-height: 400px;
+    cursor: grab;
+    background: radial-gradient(circle at center, rgba(56,189,248,0.03) 0%, transparent 70%);
+  }
+  .diagram-viewport:active { cursor: grabbing; }
+  .diagram-canvas {
+    transform-origin: 0 0;
+    transition: transform 0.1s ease-out;
+    padding: 2rem;
+    display: inline-block;
+    min-width: 100%;
+  }
+  .diagram-canvas .mermaid {
+    display: flex;
+    justify-content: center;
+  }
+  .diagram-canvas .mermaid svg {
+    max-width: none !important;
+    height: auto !important;
+  }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(8px);
+  }
+  .modal-overlay.active { display: flex; flex-direction: column; }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  .modal-header h3 { flex: 1; font-size: 1.1rem; color: var(--text); }
+  .modal-header button {
+    background: var(--border);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .modal-header button:hover { background: var(--accent); color: #0f172a; }
+  .modal-header .close-btn { background: #dc2626; color: #fff; padding: 0.35rem 1rem; margin-left: 1rem; }
+  .modal-header .close-btn:hover { background: #ef4444; }
+  .modal-body {
+    flex: 1;
+    overflow: hidden;
+    cursor: grab;
+    position: relative;
+  }
+  .modal-body:active { cursor: grabbing; }
+  .modal-canvas {
+    transform-origin: 0 0;
+    padding: 3rem;
+    display: inline-block;
+    min-width: 100%;
+    min-height: 100%;
+  }
+  .modal-canvas svg { max-width: none !important; height: auto !important; }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Architecture — SAP-Facture</h1>
+  <p>Technical Architecture & Implementation Details</p>
+</header>
+
+<nav>
+  <a href="#stack">1. Tech Stack</a>
+  <a href="#architecture">2. Architecture</a>
+  <a href="#cli">3. CLI Commands</a>
+  <a href="#datamodel">4. Data Model</a>
+  <a href="#statemachine">5. State Machine</a>
+  <a href="#integration">6. Integration Points</a>
+  <a href="#security">7. Security & Error Handling</a>
+</nav>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-header">
+    <h3 id="modal-title"></h3>
+    <button onclick="modalZoom(-0.2)">-</button>
+    <span class="zoom-level" id="modal-zoom-level">100%</span>
+    <button onclick="modalZoom(0.2)">+</button>
+    <button onclick="modalReset()">Reset</button>
+    <button class="close-btn" onclick="closeModal()">Fermer (Esc)</button>
+  </div>
+  <div class="modal-body" id="modal-body">
+    <div class="modal-canvas" id="modal-canvas"></div>
+  </div>
+</div>
+
+<main>
+
+<section id="stack">
+  <div class="section-header"><div class="num">1</div><h2>Tech Stack</h2></div>
+  <div class="desc">Technologies clés et dépendances principales.</div>
+  <div class="content">
+    <h3>Backend</h3>
+    {{BACKEND_STACK}}
+
+    <h3>Frontend</h3>
+    {{FRONTEND_STACK}}
+
+    <h3>Infrastructure & APIs</h3>
+    {{INFRA_STACK}}
+
+    <h3>Data & Storage</h3>
+    {{DATA_STACK}}
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="section-header"><div class="num">2</div><h2>Architecture Diagram</h2></div>
+  <div class="desc">Vue d'ensemble du système : couches, composants, et flux de données.</div>
+  <div class="diagram-toolbar" data-target="dia-arch">
+    <button onclick="zoom(this, -0.2)">-</button>
+    <span class="zoom-level">100%</span>
+    <button onclick="zoom(this, 0.2)">+</button>
+    <button onclick="resetZoom(this)">Reset</button>
+    <span class="spacer"></span>
+    <span class="hint">Scroll = zoom | Drag = pan | Double-clic = plein ecran</span>
+    <button onclick="openModal('Architecture Systeme', 'dia-arch')">Plein ecran</button>
+  </div>
+  <div class="diagram-viewport" ondblclick="openModal('Architecture Systeme', 'dia-arch')">
+    <div class="diagram-canvas" id="dia-arch"><pre class="mermaid">
+{{ARCHITECTURE_DIAGRAM}}
+    </pre></div>
+  </div>
+</section>
+
+<section id="cli">
+  <div class="section-header"><div class="num">3</div><h2>CLI Commands Reference</h2></div>
+  <div class="desc">Commandes disponibles et leur utilisation.</div>
+  <div class="content">
+    <h3>Core Commands</h3>
+    {{CLI_COMMANDS}}
+
+    <h3>Examples</h3>
+    <div class="terminal">
+      <div class="cmd">$ sap submit --client "Jean Dupont" --heures 20 --tarif 35</div>
+      <div class="comment"># Create and submit invoice</div>
+      <div class="cmd">$ sap sync --status</div>
+      <div class="comment"># Synchronize invoice statuses</div>
+      <div class="cmd">$ sap reconcile --output CSV</div>
+      <div class="comment"># Match invoices with bank transactions</div>
+    </div>
+  </div>
+</section>
+
+<section id="datamodel">
+  <div class="section-header"><div class="num">4</div><h2>Data Model</h2></div>
+  <div class="desc">Structure des données et relations entre entités.</div>
+  <div class="diagram-toolbar" data-target="dia-data">
+    <button onclick="zoom(this, -0.2)">-</button>
+    <span class="zoom-level">100%</span>
+    <button onclick="zoom(this, 0.2)">+</button>
+    <button onclick="resetZoom(this)">Reset</button>
+    <span class="spacer"></span>
+    <span class="hint">Scroll = zoom | Drag = pan | Double-clic = plein ecran</span>
+    <button onclick="openModal('Data Model', 'dia-data')">Plein ecran</button>
+  </div>
+  <div class="diagram-viewport" ondblclick="openModal('Data Model', 'dia-data')">
+    <div class="diagram-canvas" id="dia-data"><pre class="mermaid">
+{{DATA_MODEL_DIAGRAM}}
+    </pre></div>
+  </div>
+</section>
+
+<section id="statemachine">
+  <div class="section-header"><div class="num">5</div><h2>State Machine</h2></div>
+  <div class="desc">Transitions d'état et cycle de vie des entités principales.</div>
+  <div class="diagram-toolbar" data-target="dia-state">
+    <button onclick="zoom(this, -0.2)">-</button>
+    <span class="zoom-level">100%</span>
+    <button onclick="zoom(this, 0.2)">+</button>
+    <button onclick="resetZoom(this)">Reset</button>
+    <span class="spacer"></span>
+    <span class="hint">Scroll = zoom | Drag = pan | Double-clic = plein ecran</span>
+    <button onclick="openModal('State Machine', 'dia-state')">Plein ecran</button>
+  </div>
+  <div class="diagram-viewport" ondblclick="openModal('State Machine', 'dia-state')">
+    <div class="diagram-canvas" id="dia-state"><pre class="mermaid">
+{{STATE_MACHINE_DIAGRAM}}
+    </pre></div>
+  </div>
+</section>
+
+<section id="integration">
+  <div class="section-header"><div class="num">6</div><h2>Integration Points</h2></div>
+  <div class="desc">APIs externes et points d'intégration critiques.</div>
+  <div class="content">
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Type</th>
+          <th>Protocol</th>
+          <th>Auth</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{INTEGRATION_POINTS}}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="security">
+  <div class="section-header"><div class="num">7</div><h2>Security & Error Handling</h2></div>
+  <div class="desc">Stratégies de sécurité et gestion des erreurs.</div>
+  <div class="content">
+    <h3>Security Measures</h3>
+    <ul>
+      <li>{{SECURITY_1}}</li>
+      <li>{{SECURITY_2}}</li>
+      <li>{{SECURITY_3}}</li>
+    </ul>
+
+    <h3>Error Handling</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Error Type</th>
+          <th>Recovery</th>
+          <th>Logging</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ERROR_HANDLING}}
+      </tbody>
+    </table>
+
+    <h3>Resilience Patterns</h3>
+    {{RESILIENCE_PATTERNS}}
+  </div>
+</section>
+
+</main>
+
+<footer>SAP-Facture — BMAD Pipeline — Architecture Template — Generated {{DATE}}</footer>
+
+<script>
+const zoomState = {};
+function getState(id) {
+  if (!zoomState[id]) zoomState[id] = { scale: 1, x: 0, y: 0, dragging: false };
+  return zoomState[id];
+}
+function applyTransform(canvas, state) {
+  canvas.style.transform = 'translate(' + state.x + 'px, ' + state.y + 'px) scale(' + state.scale + ')';
+}
+function updateZoomLabel(toolbar, scale) {
+  var label = toolbar.querySelector('.zoom-level');
+  if (label) label.textContent = Math.round(scale * 100) + '%';
+}
+function zoom(btn, delta) {
+  var toolbar = btn.closest('.diagram-toolbar');
+  var targetId = toolbar.dataset.target;
+  var canvas = document.getElementById(targetId);
+  var state = getState(targetId);
+  state.scale = Math.max(0.2, Math.min(5, state.scale + delta));
+  applyTransform(canvas, state);
+  updateZoomLabel(toolbar, state.scale);
+}
+function resetZoom(btn) {
+  var toolbar = btn.closest('.diagram-toolbar');
+  var targetId = toolbar.dataset.target;
+  var canvas = document.getElementById(targetId);
+  var state = getState(targetId);
+  state.scale = 1; state.x = 0; state.y = 0;
+  applyTransform(canvas, state);
+  updateZoomLabel(toolbar, state.scale);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.diagram-viewport').forEach(function(vp) {
+    var canvas = vp.querySelector('.diagram-canvas');
+    var id = canvas.id;
+    var toolbar = vp.previousElementSibling;
+    var startX, startY, startPanX, startPanY;
+
+    vp.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      var state = getState(id);
+      var rect = vp.getBoundingClientRect();
+      var mouseX = e.clientX - rect.left;
+      var mouseY = e.clientY - rect.top;
+      var oldScale = state.scale;
+      var delta = e.deltaY > 0 ? -0.1 : 0.1;
+      state.scale = Math.max(0.2, Math.min(5, state.scale + delta));
+      var ratio = state.scale / oldScale;
+      state.x = mouseX - ratio * (mouseX - state.x);
+      state.y = mouseY - ratio * (mouseY - state.y);
+      applyTransform(canvas, state);
+      updateZoomLabel(toolbar, state.scale);
+    }, { passive: false });
+
+    vp.addEventListener('mousedown', function(e) {
+      var state = getState(id);
+      state.dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = state.x; startPanY = state.y;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+      var state = getState(id);
+      if (!state.dragging) return;
+      state.x = startPanX + (e.clientX - startX);
+      state.y = startPanY + (e.clientY - startY);
+      applyTransform(canvas, state);
+    });
+    document.addEventListener('mouseup', function() {
+      getState(id).dragging = false;
+    });
+  });
+});
+
+var modalState = { scale: 1, x: 0, y: 0, dragging: false };
+var mStartX, mStartY, mStartPanX, mStartPanY;
+
+function openModal(title, sourceId) {
+  var modal = document.getElementById('modal');
+  var modalCanvas = document.getElementById('modal-canvas');
+  var source = document.getElementById(sourceId);
+  document.getElementById('modal-title').textContent = title;
+  while (modalCanvas.firstChild) modalCanvas.removeChild(modalCanvas.firstChild);
+  var clone = source.cloneNode(true);
+  clone.removeAttribute('id');
+  while (clone.firstChild) modalCanvas.appendChild(clone.firstChild);
+  modalState = { scale: 1, x: 0, y: 0, dragging: false };
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  var pres = modalCanvas.querySelectorAll('.mermaid');
+  pres.forEach(function(pre) { pre.removeAttribute('data-processed'); });
+  mermaid.run({ nodes: pres });
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+function modalZoom(delta) {
+  modalState.scale = Math.max(0.1, Math.min(8, modalState.scale + delta));
+  applyModalTransform();
+  document.getElementById('modal-zoom-level').textContent = Math.round(modalState.scale * 100) + '%';
+}
+function modalReset() {
+  modalState = { scale: 1, x: 0, y: 0, dragging: false };
+  applyModalTransform();
+  document.getElementById('modal-zoom-level').textContent = '100%';
+}
+function applyModalTransform() {
+  var canvas = document.getElementById('modal-canvas');
+  canvas.style.transform = 'translate(' + modalState.x + 'px, ' + modalState.y + 'px) scale(' + modalState.scale + ')';
+}
+
+var modalBody = document.getElementById('modal-body');
+modalBody.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var rect = modalBody.getBoundingClientRect();
+  var mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
+  var oldScale = modalState.scale;
+  var delta = e.deltaY > 0 ? -0.15 : 0.15;
+  modalState.scale = Math.max(0.1, Math.min(8, modalState.scale + delta));
+  var ratio = modalState.scale / oldScale;
+  modalState.x = mouseX - ratio * (mouseX - modalState.x);
+  modalState.y = mouseY - ratio * (mouseY - modalState.y);
+  applyModalTransform();
+  document.getElementById('modal-zoom-level').textContent = Math.round(modalState.scale * 100) + '%';
+}, { passive: false });
+
+modalBody.addEventListener('mousedown', function(e) {
+  modalState.dragging = true;
+  mStartX = e.clientX; mStartY = e.clientY;
+  mStartPanX = modalState.x; mStartPanY = modalState.y;
+  e.preventDefault();
+});
+document.addEventListener('mousemove', function(e) {
+  if (!modalState.dragging) return;
+  modalState.x = mStartPanX + (e.clientX - mStartX);
+  modalState.y = mStartPanY + (e.clientY - mStartY);
+  applyModalTransform();
+});
+document.addEventListener('mouseup', function() { modalState.dragging = false; });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#1e40af',
+    primaryTextColor: '#e2e8f0',
+    primaryBorderColor: '#3b82f6',
+    lineColor: '#64748b',
+    secondaryColor: '#7c3aed',
+    tertiaryColor: '#1e293b',
+    fontSize: '16px'
+  },
+  flowchart: { curve: 'basis', padding: 20, htmlLabels: true, useMaxWidth: false },
+  er: { fontSize: 14, useMaxWidth: false }
+});
+</script>
+</body>
+</html>

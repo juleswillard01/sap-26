@@ -1,0 +1,102 @@
+# SAP-Facture BMAD Model Routing for Agent Teams
+# Teammates inherit lead's model unless overridden at spawn
+# Configured for cost optimization: sonnet for development, opus for review only
+
+strategy: task-complexity
+default_model: sonnet
+
+###############################################################################
+# TEAM MODEL ASSIGNMENTS
+###############################################################################
+team_models:
+  team_1_analysis:
+    lead: sonnet          # analyst
+    teammates: sonnet     # product-owner, ux-designer
+
+  team_2_architecture:
+    lead: sonnet          # architect
+    teammates: sonnet     # qa-tester
+
+  team_3_sprint:
+    lead: sonnet          # scrum-master
+
+  team_4_dev:
+    lead: sonnet          # developer (lead)
+    teammates: sonnet     # developer x4
+
+  team_5_review:
+    lead: opus            # ONLY opus for final quality gate
+    teammates: null       # no teammates in review team
+
+###############################################################################
+# COST OPTIMIZATION
+###############################################################################
+cost_optimization:
+  opus_usage: "review only"
+  sonnet_usage: "all development and planning"
+  haiku_usage: "subagent tasks within teammates"
+
+  estimated_tokens_per_phase:
+    phase_1: 150k         # 3 agents × 50k (analyst, PO, UX)
+    phase_2: 100k         # 2 agents × 50k (architect, QA)
+    phase_3: 50k          # 1 agent (scrum-master)
+    phase_4: 500k         # 5 developers × 100k (coding is token-heavy)
+    phase_5: 200k         # opus review @ 4x cost = 800k equivalent (1M context available)
+    total: "~1M raw tokens, ~1.25M cost-weighted (phase 5 opus multiplier)"
+
+  model_cost_ratio:
+    opus: 4.0             # 1M context; highest cost
+    sonnet: 1.0           # baseline; good cost/quality
+    haiku: 0.15           # lightweight only
+
+###############################################################################
+# CONTEXT PRESERVATION
+###############################################################################
+context_preservation:
+  file_attachments_enabled: true
+  max_size_mb: 50
+  token_counting_enabled: true
+  output_seeding: "Pass prior phase outputs as context to next team"
+
+###############################################################################
+# FALLBACK STRATEGIES
+###############################################################################
+fallbacks:
+  analyst:
+    primary: sonnet
+    fallback_1: opus
+    critical: true
+
+  product-owner:
+    primary: sonnet
+    fallback_1: opus
+
+  ux-designer:
+    primary: sonnet
+    fallback_1: opus
+    critical: false
+
+  architect:
+    primary: sonnet
+    fallback_1: opus
+    critical: true
+
+  qa-tester:
+    primary: sonnet
+    fallback_1: opus
+    critical: false
+
+  scrum-master:
+    primary: sonnet
+    fallback_1: opus
+    critical: false
+
+  developer:
+    primary: sonnet
+    fallback_1: opus
+    critical: true
+
+  reviewer:
+    primary: opus
+    fallback_1: "manual code review"
+    critical: true
