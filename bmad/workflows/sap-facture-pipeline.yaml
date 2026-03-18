@@ -1,0 +1,778 @@
+name: SAP-Facture Agent Teams Pipeline
+version: "2.0"
+architecture: agent-teams
+description: "Complete rewrite using real Claude Code Agent Teams feature"
+requires:
+  claude_version: ">=2.1.32"
+  experimental_flag: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+source_of_truth: docs/schemas/SCHEMAS.html
+locked_decisions:
+  D1: "CLI-first interface"
+  D2: "FastAPI secondary (JSON APIs for future)"
+  D3: "Google Sheets backend for all data"
+  D4: "Single-user (Jules) only"
+  D5: "Indy Playwright for bank export (no Swan API)"
+  D6: "Manual bank reconciliation (no auto-match)"
+  D7: "PDF invoice export priority"
+
+global:
+  output_directory: docs/bmad/deliverables
+  stories_directory: docs/stories
+  test_directory: tests
+  app_directory: app
+  coverage_threshold: 0.80
+  line_length: 120
+  python_version: "3.11"
+  hooks_directory: bmad/workflows/hooks
+
+# ============================================================================
+# AGENT TEAMS: 5 Sequential Teams (Team 1 → Team 5)
+# ============================================================================
+
+teams:
+
+  # =========================================================================
+  # TEAM 1: Analysis & Specification
+  # =========================================================================
+  team_1_analysis:
+    id: sap-analysis
+    name: "Team 1: Analysis & Specification"
+    phase: 1
+    sequence_order: 1
+    description: |
+      Analyse SCHEMAS.html and produce:
+      - Business requirements analysis
+      - Product requirements document
+      - UX/CLI specification
+
+    lead:
+      agent: analyst
+      model: sonnet
+      instructions: |
+        Tu es le LEAD de l'équipe Analysis pour SAP-Facture.
+
+        Source de vérité absolue: docs/schemas/SCHEMAS.html
+
+        Décisions verrouillées:
+        - D1: CLI-first
+        - D2: FastAPI secondary
+        - D3: Google Sheets backend
+        - D4: Single-user (Jules)
+        - D5: Indy Playwright (no Swan)
+        - D6: Manual reconciliation
+        - D7: PDF priority
+
+        Tu commandes une équipe de 2 coéquipiers:
+        1. product-owner — produit le PRD HTML
+        2. ux-designer — produit la spec CLI/UX HTML
+
+        TOI tu analyses SCHEMAS.html et synthétises l'analyse.html.
+
+        TASK LIST (task list partagée):
+        - Analyze SCHEMAS.html sections 1-8
+        - Produce 01-analysis.html (analyst)
+        - Produce 02-prd.html (product-owner)
+        - Produce 03-ux-spec.html (ux-designer)
+        - Cross-review: PO reviews analysis
+        - Cross-review: UX reviews PRD for CLI alignment
+        - Final synthesis and gate readiness check
+
+        PLAN APPROVAL: Exige l'approbation du plan avant que les coéquipiers ne commencent l'implementation.
+
+        QUALITY: Tous les livrants HTML doivent exister dans docs/bmad/deliverables/ sans erreurs.
+
+    teammates:
+      - agent: product-owner
+        model: sonnet
+        instructions: "Tu es Product Owner. Produis 02-prd.html aligné à SCHEMAS.html sections 1-8."
+        plan_approval: true
+
+      - agent: ux-designer
+        model: sonnet
+        instructions: "Tu es UX Designer. Produis 03-ux-spec.html avec flows CLI complets pour Jules."
+        plan_approval: true
+
+    task_list:
+      - id: 1-1
+        title: "Analyze SCHEMAS.html sections 1-8"
+        description: "Read all 8 sections and extract key requirements"
+        assigned_to: analyst
+        blocked_by: []
+
+      - id: 1-2
+        title: "Produce 01-analysis.html"
+        description: "Analyst synthesizes cross-referenced analysis of all 8 sections"
+        assigned_to: analyst
+        blocked_by: [1-1]
+
+      - id: 1-3
+        title: "Produce 02-prd.html"
+        description: "Product Owner produces Product Requirements Document"
+        assigned_to: product-owner
+        blocked_by: [1-1]
+
+      - id: 1-4
+        title: "Produce 03-ux-spec.html"
+        description: "UX Designer produces CLI/UX specification"
+        assigned_to: ux-designer
+        blocked_by: [1-1]
+
+      - id: 1-5
+        title: "Cross-review: PO reviews analysis"
+        description: "Product Owner validates analyst report for completeness"
+        assigned_to: product-owner
+        blocked_by: [1-2]
+
+      - id: 1-6
+        title: "Cross-review: UX reviews PRD for CLI alignment"
+        description: "UX Designer validates PRD maps to CLI workflows"
+        assigned_to: ux-designer
+        blocked_by: [1-3]
+
+      - id: 1-7
+        title: "Final synthesis and gate readiness"
+        description: "Analyst synthesizes all three documents; runs gate checks"
+        assigned_to: analyst
+        blocked_by: [1-5, 1-6]
+
+    gate:
+      name: "Gate 1: Analysis Completeness"
+      hook: task-completed
+      hook_file: bmad/workflows/hooks/task-completed.sh
+      blocking: false
+      criteria:
+        - deliverable_files_exist: [01-analysis.html, 02-prd.html, 03-ux-spec.html]
+        - no_critical_gaps: "01-analysis.html"
+        - schemas_referenced: [02-prd.html, 03-ux-spec.html]
+        - all_html_format: true
+      pass_condition: "All automated checks pass + manual reviews signed"
+      fail_action: "Return to Team 1; analyst refines deliverables"
+
+    display_mode: in-process
+    outputs:
+      - docs/bmad/deliverables/01-analysis.html
+      - docs/bmad/deliverables/02-prd.html
+      - docs/bmad/deliverables/03-ux-spec.html
+
+  # =========================================================================
+  # TEAM 2: Architecture & Testing Strategy
+  # =========================================================================
+  team_2_architecture:
+    id: sap-architecture
+    name: "Team 2: Architecture & Testing Strategy"
+    phase: 2
+    sequence_order: 2
+    depends_on: [team_1_analysis]
+    description: |
+      Design system architecture aligned to SCHEMAS.html.
+      Define test strategy and coverage targets.
+
+    lead:
+      agent: architect
+      model: sonnet
+      instructions: |
+        Tu es le LEAD de l'équipe Architecture pour SAP-Facture.
+
+        Ingestion:
+        - Lis les 3 livrants de Team 1: analysis.html, prd.html, ux-spec.html
+        - Lis SCHEMAS.html sections 4 (Architecture) et 5 (Données)
+
+        Tu commandes une équipe de 1 coéquipier:
+        1. qa-tester — produit le test plan HTML
+
+        TOI tu designs l'architecture et produis 04-architecture.html.
+
+        TASK LIST (partagée):
+        - Ingest Team 1 deliverables
+        - Design system architecture (FastAPI, Google Sheets, Playwright/Indy)
+        - Produce 04-architecture.html (architect)
+        - Produce 05-test-plan.html (qa-tester)
+        - Cross-review: QA validates architecture testability
+        - Gate readiness check
+
+        PLAN APPROVAL: Exige l'approbation du plan avant l'implementation.
+
+        QUALITY: Architecture must NOT reference Swan API; must mention FastAPI, Google Sheets, Playwright, Indy, Pydantic.
+
+    teammates:
+      - agent: qa-tester
+        model: sonnet
+        instructions: "Tu es QA Tester. Lis architecture.html; produis 05-test-plan.html avec stratégie de test, 80% coverage target."
+        plan_approval: true
+
+    task_list:
+      - id: 2-1
+        title: "Ingest Team 1 deliverables + SCHEMAS.html"
+        description: "Read analysis, PRD, UX spec, and SCHEMAS.html sections 4-5"
+        assigned_to: architect
+        blocked_by: []
+
+      - id: 2-2
+        title: "Design system architecture"
+        description: "FastAPI layers, Google Sheets adapter, Playwright/Indy integration, Pydantic models"
+        assigned_to: architect
+        blocked_by: [2-1]
+
+      - id: 2-3
+        title: "Produce 04-architecture.html"
+        description: "Architect publishes complete architecture document"
+        assigned_to: architect
+        blocked_by: [2-2]
+
+      - id: 2-4
+        title: "Produce 05-test-plan.html"
+        description: "QA produces test plan: unit, integration, e2e with 80% coverage target"
+        assigned_to: qa-tester
+        blocked_by: [2-3]
+
+      - id: 2-5
+        title: "Cross-review: QA validates architecture testability"
+        description: "QA reviews architecture for mockability and test feasibility"
+        assigned_to: qa-tester
+        blocked_by: [2-3]
+
+      - id: 2-6
+        title: "Gate readiness check"
+        description: "Architect runs Gate 2 automated checks"
+        assigned_to: architect
+        blocked_by: [2-4, 2-5]
+
+    gate:
+      name: "Gate 2: Architecture Coherence"
+      hook: task-completed
+      hook_file: bmad/workflows/hooks/task-completed.sh
+      blocking: false
+      criteria:
+        - deliverable_files_exist: [04-architecture.html, 05-test-plan.html]
+        - required_tech_mentioned: [FastAPI, "Google Sheets", Playwright, Indy, Pydantic]
+        - no_swan_references: "04-architecture.html"
+        - test_coverage_80_percent_target: "05-test-plan.html"
+        - no_critical_gaps: "04-architecture.html"
+      pass_condition: "All automated checks pass + manual reviews signed"
+      fail_action: "Return to Team 2; architect refines design"
+
+    display_mode: in-process
+    outputs:
+      - docs/bmad/deliverables/04-architecture.html
+      - docs/bmad/deliverables/05-test-plan.html
+
+  # =========================================================================
+  # TEAM 3: Sprint Planning
+  # =========================================================================
+  team_3_planning:
+    id: sap-planning
+    name: "Team 3: Sprint Planning"
+    phase: 3
+    sequence_order: 3
+    depends_on: [team_2_architecture]
+    description: |
+      Create user stories with acceptance criteria.
+      Plan sprints and define dependencies.
+
+    lead:
+      agent: scrum-master
+      model: sonnet
+      instructions: |
+        Tu es le LEAD (et unique agent) de Team 3: Sprint Planning.
+
+        Ingestion:
+        - Lis Team 1 livrants (analysis, PRD, UX spec)
+        - Lis Team 2 livrants (architecture, test plan)
+        - Lis SCHEMAS.html sections 1-8
+
+        SOLO RESPONSIBILITY:
+        Produis 2 livrants:
+        1. docs/bmad/deliverables/06-sprint-board.html — sprint plan + backlog
+        2. docs/stories/*.md — minimum 5 user stories with acceptance criteria
+
+        TASK LIST (solo):
+        - Ingest Team 1 + Team 2 deliverables
+        - Define minimum 5 user stories
+        - Map stories to sprints (Sprint 1, Sprint 2, etc.)
+        - Document dependencies and critical path
+        - Produce 06-sprint-board.html
+        - Write story files (docs/stories/*.md)
+        - Gate readiness check
+
+        QUALITY:
+        - Each story: title, description, acceptance criteria (Given/When/Then)
+        - Story naming: lowercase-with-dashes.md
+        - Minimum 5 stories (can exceed)
+        - All stories must reference SCHEMAS.html sections
+        - Dependencies form a valid DAG (no circular)
+
+    task_list:
+      - id: 3-1
+        title: "Ingest Team 1 + Team 2 deliverables"
+        description: "Read all 5 documents from previous teams"
+        assigned_to: scrum-master
+        blocked_by: []
+
+      - id: 3-2
+        title: "Define minimum 5 user stories"
+        description: "Create stories aligned to SCHEMAS.html and architecture"
+        assigned_to: scrum-master
+        blocked_by: [3-1]
+
+      - id: 3-3
+        title: "Map stories to sprints"
+        description: "Group stories into Sprint 1, 2, etc. with dependencies"
+        assigned_to: scrum-master
+        blocked_by: [3-2]
+
+      - id: 3-4
+        title: "Produce 06-sprint-board.html"
+        description: "Create sprint board document with all stories and schedule"
+        assigned_to: scrum-master
+        blocked_by: [3-3]
+
+      - id: 3-5
+        title: "Write story files (docs/stories/*.md)"
+        description: "Create ≥5 markdown files with acceptance criteria"
+        assigned_to: scrum-master
+        blocked_by: [3-3]
+
+      - id: 3-6
+        title: "Gate readiness check"
+        description: "Scrum Master runs Gate 3 automated checks"
+        assigned_to: scrum-master
+        blocked_by: [3-4, 3-5]
+
+    gate:
+      name: "Gate 3: Story Completeness"
+      hook: task-completed
+      hook_file: bmad/workflows/hooks/task-completed.sh
+      blocking: false
+      criteria:
+        - deliverable_files_exist: [06-sprint-board.html]
+        - minimum_5_user_stories: "docs/stories"
+        - all_stories_have_acceptance_criteria: "docs/stories"
+        - story_naming_convention: "docs/stories/*.md"
+        - no_circular_dependencies: "06-sprint-board.html"
+        - stories_reference_schemas: "docs/stories"
+      pass_condition: "All automated checks pass + manual review signed"
+      fail_action: "Return to Team 3; scrum-master refines stories"
+
+    display_mode: in-process
+    outputs:
+      - docs/bmad/deliverables/06-sprint-board.html
+      - docs/stories/*.md
+
+  # =========================================================================
+  # TEAM 4: Development (Party Mode)
+  # =========================================================================
+  team_4_development:
+    id: sap-dev
+    name: "Team 4: Development (Party Mode)"
+    phase: 4
+    sequence_order: 4
+    depends_on: [team_3_planning]
+    description: |
+      Multiple developers work in parallel.
+      One story per developer, max 5 parallel developers.
+
+    lead:
+      agent: developer
+      model: sonnet
+      instructions: |
+        Tu es le LEAD de Team 4: Development (Party Mode).
+
+        Ingestion:
+        - Lis 06-sprint-board.html (stories + sprints)
+        - Lis all docs/stories/*.md files (acceptance criteria)
+        - Lis 04-architecture.html (design reference)
+        - Lis 05-test-plan.html (test strategy)
+
+        RESPONSIBILITY:
+        Tu coordonnes 4 autres développeurs (total 5 instances en parallèle).
+        Chaque dev = 1 story (assignment_strategy: one_story_per_instance).
+
+        TASK LIST (partagée entre 5 devs):
+        - Start Sprint 1
+        - [Dev 1] Implement Story 1
+        - [Dev 2] Implement Story 2
+        - [Dev 3] Implement Story 3
+        - [Dev 4] Implement Story 4
+        - [Dev 5] Implement Story 5 (si existe)
+        - Run all tests (pytest)
+        - Verify coverage >= 80%
+        - Run linting (ruff)
+        - Run type checking (mypy)
+
+        PLAN APPROVAL: Chaque dev doit avoir un plan approuvé avant l'implementation.
+
+        QUALITY:
+        - All tests pass
+        - Coverage >= 80%
+        - Ruff clean (linting + formatting)
+        - MyPy strict mode clean
+        - No Swan references
+        - No hardcoded secrets
+        - All functions type-hinted
+
+    teammates:
+      - agent: developer-2
+        model: sonnet
+        plan_approval: true
+      - agent: developer-3
+        model: sonnet
+        plan_approval: true
+      - agent: developer-4
+        model: sonnet
+        plan_approval: true
+      - agent: developer-5
+        model: sonnet
+        plan_approval: true
+
+    task_list:
+      - id: 4-1
+        title: "Start Sprint 1"
+        description: "Scrum Master marks Sprint 1 active; all devs ready"
+        assigned_to: developer
+        blocked_by: []
+
+      - id: 4-2
+        title: "Implement Story 1 (developer-1)"
+        description: "Dev 1 implements assigned story"
+        assigned_to: developer
+        blocked_by: [4-1]
+
+      - id: 4-3
+        title: "Implement Story 2 (developer-2)"
+        description: "Dev 2 implements assigned story"
+        assigned_to: developer-2
+        blocked_by: [4-1]
+
+      - id: 4-4
+        title: "Implement Story 3 (developer-3)"
+        description: "Dev 3 implements assigned story"
+        assigned_to: developer-3
+        blocked_by: [4-1]
+
+      - id: 4-5
+        title: "Implement Story 4 (developer-4)"
+        description: "Dev 4 implements assigned story"
+        assigned_to: developer-4
+        blocked_by: [4-1]
+
+      - id: 4-6
+        title: "Implement Story 5 (developer-5, optional)"
+        description: "Dev 5 implements assigned story if exists"
+        assigned_to: developer-5
+        blocked_by: [4-1]
+
+      - id: 4-7
+        title: "Run all tests (pytest)"
+        description: "Execute pytest; all tests must pass"
+        assigned_to: developer
+        blocked_by: [4-2, 4-3, 4-4, 4-5, 4-6]
+
+      - id: 4-8
+        title: "Verify coverage >= 80%"
+        description: "pytest --cov=app --cov-fail-under=80"
+        assigned_to: developer
+        blocked_by: [4-7]
+
+      - id: 4-9
+        title: "Run linting (ruff)"
+        description: "ruff check app/ tests/ && ruff format app/ tests/"
+        assigned_to: developer
+        blocked_by: [4-8]
+
+      - id: 4-10
+        title: "Run type checking (mypy)"
+        description: "mypy --strict app/"
+        assigned_to: developer
+        blocked_by: [4-9]
+
+      - id: 4-11
+        title: "Gate readiness check"
+        description: "Lead runs Gate 4 automated checks"
+        assigned_to: developer
+        blocked_by: [4-10]
+
+    gate:
+      name: "Gate 4: Code Quality"
+      hook: task-completed
+      hook_file: bmad/workflows/hooks/task-completed.sh
+      blocking: true
+      criteria:
+        - all_tests_pass: "pytest tests/"
+        - coverage_gte_80: "pytest --cov=app --cov-fail-under=80"
+        - ruff_check_clean: "ruff check app/ tests/"
+        - ruff_format_clean: "ruff format --check app/ tests/"
+        - mypy_strict_clean: "mypy --strict app/"
+        - no_hardcoded_secrets: "app/ tests/"
+        - no_swan_references: "app/ tests/"
+        - functions_type_hinted: "app/"
+      pass_condition: "All automated checks pass + manual reviews signed (scrum-master + architect)"
+      fail_action: "Block merge; return to developers for fixes"
+
+    display_mode: in-process
+    max_instances: 5
+    assignment_strategy: one_story_per_instance
+    outputs:
+      - app/**/*.py
+      - tests/**/*.py
+      - docs/bmad/deliverables/07-dev-complete.html
+
+  # =========================================================================
+  # TEAM 5: Code Review (Opus Model)
+  # =========================================================================
+  team_5_review:
+    id: sap-review
+    name: "Team 5: Code Review (Opus)"
+    phase: 5
+    sequence_order: 5
+    depends_on: [team_4_development]
+    description: |
+      Senior Opus review against SCHEMAS.html, security, performance.
+      This is BLOCKING and required before merge to main.
+
+    lead:
+      agent: reviewer
+      model: opus
+      instructions: |
+        Tu es le LEAD (et unique agent) de Team 5: Final Code Review.
+
+        Ingestion:
+        - Lis TOUT: Team 1-4 livrants
+        - Lis le code complet: app/ + tests/
+        - Lis SCHEMAS.html sections 1-8 (référence ultime)
+
+        RESPONSIBILITY:
+        Tu fais une review approfondie du code final.
+        Cette phase est BLOCKING pour merge à main.
+        Maximum 3 itérations de review:
+        - Iteration 1: Auto-return to dev si failing
+        - Iteration 2: Schedule meeting avec architect + scrum-master
+        - Iteration 3: Escalate to Jules (decision gate)
+
+        TASK LIST (solo):
+        - Read all Phase 4 code
+        - Verify SCHEMAS.html alignment (8 sections)
+        - Security review (CRITICAL issues only)
+        - Performance review
+        - Code quality review (maintainability, style)
+        - Test quality review
+        - Produce 08-review-report.html
+        - Gate readiness check
+
+        QUALITY:
+        - 0 CRITICAL issues allowed
+        - 0 HIGH security issues allowed
+        - Coverage >= 80%
+        - All tests passing
+        - Code aligned to SCHEMAS.html
+
+    task_list:
+      - id: 5-1
+        title: "Read all Phase 4 code"
+        description: "Review complete app/ and tests/ directories"
+        assigned_to: reviewer
+        blocked_by: []
+
+      - id: 5-2
+        title: "Verify SCHEMAS.html alignment (8 sections)"
+        description: "Check code maps to all 8 SCHEMAS.html sections"
+        assigned_to: reviewer
+        blocked_by: [5-1]
+
+      - id: 5-3
+        title: "Security review (CRITICAL issues)"
+        description: "Check for hardcoded secrets, SQL injection, path traversal, eval/exec"
+        assigned_to: reviewer
+        blocked_by: [5-1]
+
+      - id: 5-4
+        title: "Security review (HIGH issues)"
+        description: "Check for weak validation, missing rate limiting, inadequate logging"
+        assigned_to: reviewer
+        blocked_by: [5-3]
+
+      - id: 5-5
+        title: "Performance review"
+        description: "Check timeouts, N+1 queries, caching strategy"
+        assigned_to: reviewer
+        blocked_by: [5-1]
+
+      - id: 5-6
+        title: "Code quality review"
+        description: "Check function size, naming, no duplication, comments"
+        assigned_to: reviewer
+        blocked_by: [5-1]
+
+      - id: 5-7
+        title: "Test quality review"
+        description: "Check happy path, edge cases, error handling, determinism"
+        assigned_to: reviewer
+        blocked_by: [5-1]
+
+      - id: 5-8
+        title: "Produce 08-review-report.html"
+        description: "Opus publishes comprehensive review report"
+        assigned_to: reviewer
+        blocked_by: [5-2, 5-3, 5-4, 5-5, 5-6, 5-7]
+
+      - id: 5-9
+        title: "Gate readiness check"
+        description: "Opus runs Gate 5 automated checks"
+        assigned_to: reviewer
+        blocked_by: [5-8]
+
+    gate:
+      name: "Gate 5: Final Review (Opus — Blocking)"
+      hook: task-completed
+      hook_file: bmad/workflows/hooks/task-completed.sh
+      blocking: true
+      criteria:
+        - all_tests_pass: "pytest tests/"
+        - coverage_gte_80: "pytest --cov=app --cov-fail-under=80"
+        - ruff_clean: "ruff check app/ tests/ && ruff format --check app/ tests/"
+        - mypy_strict: "mypy --strict app/"
+        - zero_critical_security: "08-review-report.html"
+        - zero_high_security: "08-review-report.html"
+        - schemas_alignment: "08-review-report.html"
+      pass_condition: "0 CRITICAL issues + 0 HIGH security issues + coverage >= 80% + SCHEMAS.html aligned"
+      fail_action: "Iteration 1→Phase 4; Iteration 2→meeting; Iteration 3→escalate to Jules"
+
+    review_iterations:
+      iteration_1:
+        action: auto_return
+        on_fail: return_to_phase_4
+        deadline_days: 2
+        action_message: "Return to Phase 4; developers fix issues"
+
+      iteration_2:
+        action: schedule_meeting
+        on_fail: escalate
+        participants: [reviewer, architect, scrum-master, developer]
+        deadline_days: 1
+        action_message: "Schedule 30-min sync with architect + scrum-master + lead dev"
+
+      iteration_3:
+        action: escalate
+        on_fail: manual_decision
+        escalate_to: [product-owner, jules]
+        deadline_days: 1
+        action_message: "Escalate to Jules: merge despite issues (rare) or revert to planning"
+
+    display_mode: in-process
+    outputs:
+      - docs/bmad/deliverables/08-review-report.html
+
+# ============================================================================
+# QUALITY GATES (hooked to task completion)
+# ============================================================================
+
+quality_gates:
+  gate_1_analysis_completeness:
+    team: team_1_analysis
+    trigger: task-completed
+    hook_file: bmad/workflows/hooks/task-completed.sh
+    blocking: false
+
+  gate_2_architecture_coherence:
+    team: team_2_architecture
+    trigger: task-completed
+    hook_file: bmad/workflows/hooks/task-completed.sh
+    blocking: false
+
+  gate_3_story_completeness:
+    team: team_3_planning
+    trigger: task-completed
+    hook_file: bmad/workflows/hooks/task-completed.sh
+    blocking: false
+
+  gate_4_code_quality:
+    team: team_4_development
+    trigger: task-completed
+    hook_file: bmad/workflows/hooks/task-completed.sh
+    blocking: true
+
+  gate_5_final_review:
+    team: team_5_review
+    trigger: task-completed
+    hook_file: bmad/workflows/hooks/task-completed.sh
+    blocking: true
+
+# ============================================================================
+# INTEGRATIONS & CONTEXT
+# ============================================================================
+
+integrations:
+  source_of_truth:
+    file: docs/schemas/SCHEMAS.html
+    sections:
+      - "1. Parcours Utilisateur"
+      - "2. Flux Facturation"
+      - "3. API URSSAF"
+      - "4. Architecture"
+      - "5. Donnees"
+      - "6. Rappro Bancaire"
+      - "7. Etats Facture"
+      - "8. Scope MVP"
+    validation: "All deliverables must reference relevant sections"
+
+  code_repository:
+    base_path: app/
+    modules:
+      - adapters/
+      - models/
+      - routers/
+      - services/
+    test_path: tests/
+
+  version_control:
+    branch_protection: main
+    commit_format: "conventional"
+    require_pr_review: true
+    require_status_checks: true
+
+# ============================================================================
+# OUTPUTS & DELIVERABLES
+# ============================================================================
+
+deliverables:
+  phase_1:
+    - docs/bmad/deliverables/01-analysis.html
+    - docs/bmad/deliverables/02-prd.html
+    - docs/bmad/deliverables/03-ux-spec.html
+
+  phase_2:
+    - docs/bmad/deliverables/04-architecture.html
+    - docs/bmad/deliverables/05-test-plan.html
+
+  phase_3:
+    - docs/bmad/deliverables/06-sprint-board.html
+    - docs/stories/*.md
+
+  phase_4:
+    - app/**/*.py
+    - tests/**/*.py
+    - docs/bmad/deliverables/07-dev-complete.html
+
+  phase_5:
+    - docs/bmad/deliverables/08-review-report.html
+
+# ============================================================================
+# SUCCESS CRITERIA
+# ============================================================================
+
+success_criteria:
+  all_phases_complete: true
+  coverage_threshold_met: "80%"
+  all_gates_passed: true
+  final_review_approved: true
+  deployment_ready: "Gate 5 PASS with Opus sign-off"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+
+metadata:
+  version: "2.0"
+  date: "2026-03-18"
+  author: "Claude Code Agent"
+  description: "Complete rewrite using real Agent Teams feature (v2)"
+  last_updated: "2026-03-18"
