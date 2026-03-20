@@ -1,130 +1,120 @@
-# SAP-Facture — Agent Teams Context
+# SAP-Facture — Orchestrateur Services à la Personne
 
-## Source de Vérité Absolue
-Le fichier `docs/schemas/SCHEMAS.html` contient 8 diagrammes Mermaid qui définissent l'architecture complète :
+## Philosophie
+Dogfooding du Golden Workflow. Le `.claude/` sert à développer ET constitue un modèle réutilisable.
+Principes premiers obligatoires. KISS/YAGNI d'abord. Ne jamais briser l'existant.
 
-1. Parcours Utilisateur Quotidien
-2. Flux de Facturation End-to-End
-3. Séquence API URSSAF
-4. Architecture Système
-5. Modèle de Données (8 onglets Google Sheets)
-6. Rapprochement Bancaire & Lettrage
-7. Machine à États Facture (10 états, 17 transitions)
-8. Scope MVP vs Phases Futures
+## Quoi
+Orchestrateur Python/FastAPI autour du logiciel avance-immediate.fr (facturation + URSSAF).
+Le projet gère tout ce qui entoure la facturation : Google Sheets comme backend data,
+rapprochement bancaire Indy via Playwright, dashboard web, CLI, cron jobs et reporting.
 
-**INTOUCHABLE** — toute architecture, code, ou documentation doit s'aligner dessus.
+**Ce qu'on NE fait PAS** : la facturation elle-même et la soumission URSSAF → délégué à avance-immediate.fr (offre tout-en-un ~99€/an).
 
-## Décisions Verrouillées (2026-03-18)
+## Stack
+- **Langage** : Python 3.12+
+- **Framework** : FastAPI + Jinja2 + Tailwind (SSR)
+- **Data backend** : Google Sheets API v4 (gspread) — 8 onglets
+- **CLI** : Click (`sap submit`, `sap sync`, `sap reconcile`, `sap export`)
+- **Scraping bancaire** : Playwright (Indy Banking)
+- **PDF** : WeasyPrint
+- **Email** : SMTP (notifications, reminders)
+- **Packages** : `uv` (PAS pip, PAS poetry)
+- **Container** : Docker + docker-compose
+- **Tests** : pytest + pytest-cov (TDD, couverture ≥80%)
+- **Lint** : ruff check + ruff format
+- **Types** : pyright strict
+- **MCP** : Context7 uniquement
 
-| Décision | Détail |
-|----------|--------|
-| **D1: Polling URSSAF** | Toutes les 4 heures |
-| **D2: Email SMTP** | SAP-Facture (via `aiosmtplib`) |
-| **D3: États Facture** | CREE → EN_ATTENTE immédiat |
-| **D4: CLI FIRST** | Click CLI est l'interface principale, pas le web en MVP |
-| **D5: Indy + Playwright** | Scraping transactions bancaires **PAS Swan API** |
-| **D6: Lettrage Manuel** | Lettrage manuel en MVP, pas d'auto-lettrage |
-| **D7: PDF Prioritaire** | PDF factures prioritaires, stockage Google Drive |
-
-## Stack Technique
-- **Python 3.11+**, FastAPI, Click CLI
-- **Pydantic v2** — validation stricte
-- **Google Sheets API v4** (gspread) — backend database
-- **WeasyPrint** — génération PDF
-- **Playwright** — Indy banking scraping
-- **aiosmtplib** — notifications email
-- **pytest, ruff, mypy --strict** — qualité code
-
-Dev: `pip install -e ".[dev]"` | Tests: `pytest --cov=app --cov-fail-under=80`
-
-Google Sheets: service account JSON base64 in `.env` (GOOGLE_SERVICE_ACCOUNT_B64). Voir `.env.example` pour toutes les variables.
-
-## Architecture (4 couches)
-
+## Structure projet
 ```
-┌─────────────────────────────────────┐
-│  Présentation: CLI (Click) + Web    │
-├─────────────────────────────────────┤
-│  Métier: Services (Facture, Email)  │
-├─────────────────────────────────────┤
-│  Accès: SheetsAdapter               │
-├─────────────────────────────────────┤
-│  Intégrations: URSSAF, Indy, PDF    │
-└─────────────────────────────────────┘
-```
-
-## Structure Projet
-
-```
-app/
-├── main.py           # FastAPI factory
-├── config.py         # Pydantic Settings (.env)
-├── adapters/         # SheetsAdapter, URSSAFClient, IndyBrowserAdapter
-├── models/           # Pydantic v2 models
-├── services/         # Business logic
-└── routers/          # FastAPI endpoints
-
-tests/
-├── unit/             # No I/O
-├── conftest.py       # Shared fixtures
+src/
+  app.py              # FastAPI application factory
+  cli.py              # Click CLI (sap submit/sync/reconcile/export)
+  config.py           # pydantic-settings (.env)
+  models/
+    client.py         # Modèle Client
+    invoice.py        # Modèle Facture + machine à états
+    transaction.py    # Modèle Transaction bancaire
+  services/
+    invoice_service.py      # Création + validation factures
+    client_service.py       # Gestion clients
+    payment_tracker.py      # Polling statuts (cron 4h)
+    bank_reconciliation.py  # Lettrage auto (score confiance)
+    notification_service.py # Email reminders T+36h
+    nova_reporting.py       # Metrics trimestrielles NOVA
+  adapters/
+    sheets_adapter.py       # gspread — Google Sheets API v4
+    indy_adapter.py         # Playwright — scraping Indy Banking
+    pdf_generator.py        # WeasyPrint — génération PDF
+    email_notifier.py       # SMTP — envoi emails
+io/                   # Artéfacts I/O (exports, cache)
+tests/                # Miroir de src/ avec préfixe test_
+docs/                 # CDC, ADR, schémas
+.claude/              # Configuration Claude Code (le produit)
 ```
 
-## Règles de Code — STRICTES
+## Commandes clés
+```bash
+make install          # uv sync
+make test             # pytest -x --tb=short
+make test-cov         # pytest --cov=src --cov-report=term-missing
+make lint             # ruff check + ruff format --check
+make typecheck        # pyright src
+make format           # ruff format src tests
+make dev              # uvicorn src.app:app --reload
+make docker-build     # docker build
+make docker-run       # docker-compose up
+```
 
-### Type Safety
-- Type hints sur **TOUTES** les signatures (params + return)
-- `from __future__ import annotations` en haut de chaque fichier
-- Pydantic v2 `BaseModel` pour toutes structures de données
-- `mypy --strict` doit passer sans erreurs
+## Golden Workflow — OBLIGATOIRE pour chaque tâche
+0. **CDC** : Valider contre `docs/CDC.md` → agent cdc-validator
+1. **Plan** : Concevoir, écrire ADR si décision majeure → agent architect
+2. **TDD** : Test PREMIER, voir échouer, implémenter → agent tdd-engineer
+3. **Review** : lint + typecheck + tests + revue → agents code-reviewer, security-auditor
+4. **Verify** : Quality gates 25/50/75/100% → agent quality-gate-keeper
+5. **Commit** : `type(scope): description` conventionnel, atomique
+6. **Refactor** : APRÈS tests verts uniquement → agent refactor-guide
 
-### Qualité
-- `ruff check --fix && ruff format` avant tout commit
-- Max 200-400 lignes par fichier, 50 lignes par fonction
-- Max 3 niveaux d'indentation
-- `snake_case` fonctions/variables, `PascalCase` classes
+## Portes qualité
+- **25%** : Architecture alignée CDC, interfaces définies
+- **50%** : Interfaces intégrées et testées, lint/types passent
+- **75%** : Couverture ≥80%, sécurité OK, edge cases testés
+- **100%** : CDC complet, Docker build OK, smoke test validé
 
-### Patterns Obligatoires
-- Repository pattern pour data access
-- Services layer pour la logique métier
-- Dependency injection dans constructeurs
-- logging (jamais `print()`)
-- pathlib (jamais `os.path`)
+## Modèles agents
+- **opus** : orchestrator, cdc-validator, architect
+- **sonnet** : tdd-engineer, code-reviewer, security-auditor, sheets-specialist, infra-engineer, refactor-guide
+- **haiku** : quality-gate-keeper
 
-### Testing
-- **80% minimum coverage** (`pytest --cov-fail-under=80`)
-- Tests requirement-driven, pas implementation-driven
-- Couvrir: happy path, edge cases, error handling, state transitions
-- Mock ALL external APIs (URSSAF, Google Sheets, Indy)
-- Nommer tests: `test_<what>_<condition>_<expected>`
+## Google Sheets — 8 onglets
+### Data brute (éditables)
+1. **Clients** : client_id, nom, prénom, email, téléphone, adresse, urssaf_id, statut
+2. **Factures** : facture_id, client_id, nature_code, quantité, montant, statut, dates
+3. **Transactions** : transaction_id, indy_id, date_valeur, montant, libellé, statut_lettrage
 
-## Livrables BMAD
+### Calculés (formules, lecture seule)
+4. **Lettrage** : matching factures ↔ transactions, score confiance
+5. **Balances** : soldes mensuels, CA, reçu URSSAF
+6. **Metrics NOVA** : reporting trimestriel
+7. **Cotisations** : charges micro-entreprise 25.8%
+8. **Fiscal IR** : simulation impôt, abattement BNC 34%
 
-Tous les livrables sont en **HTML dark-theme** (Mermaid inclus) dans `docs/bmad/deliverables/`.
+## Machine à états Facture
+BROUILLON → SOUMIS → CREE → EN_ATTENTE → VALIDE → PAYE → RAPPROCHE
+Branches : ERREUR, EXPIRE, REJETE, ANNULE (voir docs/CDC.md §7)
 
-Templates de base dans `bmad/templates/` :
-- `architecture-template.html` — architecture diagrams
-- `prd-template.html` — product requirements
-- `review-report-template.html` — code review results
-- `sprint-board-template.html` — sprint status
-- `test-plan-template.html` — test coverage & results
+## Style code
+- Fonctions < 30 lignes
+- Pas de `except` nu
+- Docstrings sur fonctions publiques
+- `pathlib.Path`, `httpx`, annotations de type partout
+- `pydantic.BaseModel` pour modèles de données
+- Secrets via `.env` + pydantic-settings. JAMAIS hardcodés.
 
-**Injection helper** : `bmad/templates/inject.py` remplace `{{PLACEHOLDER}}` markers avec valeurs JSON.
-
-## INTERDIT
-
-- Toute référence à Swan ou Swan API
-- Lettrage automatique en MVP
-- Web dashboard en MVP (CLI first)
-- `print()` au lieu de `logging`
-- `os.path` au lieu de `pathlib`
-- Secrets en dur dans le code
-- Cross-package imports relatifs
-- Fonctions > 50 lignes
-- Fichiers > 400 lignes
-
-## Contacts & Escalade
-
-- **Product Owner** : Jules Willard (project lead)
-- **Architecture Decision** : voir `bmad/ARCHITECTURE.md`
-- **Agent Manifest** : `bmad/AGENT-MANIFEST.md`
-- **Workflows** : `bmad/workflows/`
+## IMPORTANT
+- JAMAIS commit `.env`, credentials Google, tokens URSSAF
+- JAMAIS d'appels API réels dans les tests — mocker avec `respx`
+- Google Sheets est le backend : traiter gspread comme un ORM
+- Playwright pour Indy = fragile → toujours avec retry + screenshots d'erreur
+- Le lettrage auto utilise un score de confiance ≥80 pour AUTO, sinon A_VERIFIER

@@ -1,36 +1,18 @@
-# Environment
 .env
-.env.local
-.env.*.local
-
-# Python
+.env.*
+!.env.example
+credentials/
+*.json
+!package.json
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.venv/
-venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Coverage / Linting / Type checking
-htmlcov/
-.coverage
-.coverage.*
-.ruff_cache/
-.mypy_cache/
+*.pyc
 .pytest_cache/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
+.ruff_cache/
+.pyright/
+io/exports/
+io/cache/
+*.egg-info/
+dist/
+build/
+.venv/
+.claude/memory/session-log.txt

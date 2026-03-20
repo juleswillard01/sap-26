@@ -1,55 +1,31 @@
-# Multi-stage build
-FROM python:3.11-slim as builder
+FROM python:3.12-slim
 
-WORKDIR /build
-
-# Install build dependencies
+# WeasyPrint + Playwright system deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libffi-dev \
+    shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy project metadata
-COPY pyproject.toml .
-
-# Build wheels
-RUN pip install --upgrade pip setuptools wheel && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -e .
-
-# ===== RUNTIME =====
-FROM python:3.11-slim
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl && \
-    rm -rf /var/lib/apt/lists/*
+# Dependencies first (layer cache)
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --no-dev --frozen 2>/dev/null || uv sync --no-dev
+RUN uv run playwright install --with-deps chromium
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser
+# Source
+COPY src/ src/
+COPY io/ io/
 
-# Copy wheels from builder
-COPY --from=builder /build/wheels /wheels
-COPY --from=builder /build/pyproject.toml .
+# Credentials mounted at runtime via docker secret
+# NEVER copy service_account.json into the image
 
-# Install wheels
-RUN pip install --no-cache-dir /wheels/* && \
-    rm -rf /wheels
+ENV PYTHONUNBUFFERED=1
 
-# Copy app code
-COPY --chown=appuser:appuser app/ ./app/
-COPY --chown=appuser:appuser scripts/ ./scripts/
-
-# Create logs directory
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
-
-# Switch to non-root user
-USER appuser
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Run
-EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["uv", "run", "python", "-m", "src.cli"]
