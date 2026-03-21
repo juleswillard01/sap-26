@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum as StrEnum  # type: ignore
 
 from pydantic import BaseModel
 

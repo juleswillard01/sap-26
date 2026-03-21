@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from datetime import date  # noqa: TC003
-from enum import StrEnum
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum as StrEnum  # type: ignore
 
 from pydantic import BaseModel
 

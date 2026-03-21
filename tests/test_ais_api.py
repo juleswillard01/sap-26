@@ -13,12 +13,12 @@ Mock httpx completement via respx.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     from datetime import UTC
 except ImportError:
-    UTC = UTC
+    UTC = timezone.utc
 
 import httpx
 import pytest

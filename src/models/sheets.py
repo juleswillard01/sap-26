@@ -9,8 +9,12 @@ All 8 sheets from SCHEMAS.html section 5:
 from __future__ import annotations
 
 from datetime import date
-from enum import StrEnum
 from typing import Annotated
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum as StrEnum  # type: ignore
 
 import patito as pt  # type: ignore[import-untyped]
 from pydantic import Field

@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
-
-import httpx
 
 try:
     from datetime import UTC
 except ImportError:
-    UTC = UTC
+    UTC = timezone.utc
+
+import httpx
 
 if TYPE_CHECKING:
     from src.config import Settings
@@ -249,7 +250,6 @@ class AISAPIAdapter:
         Returns:
             Liste de dicts (factures en attente) avec champ supplémentaire 'hours_waiting'.
         """
-        from datetime import datetime
 
         invoices = self.get_invoice_statuses()
         reminders: list[dict[str, Any]] = []

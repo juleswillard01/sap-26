@@ -10,6 +10,7 @@ IMPORTANT : Google Sheets est le backend data. Traiter comme un ORM.
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import cachetools  # type: ignore[import-untyped]
@@ -92,6 +93,9 @@ class SheetsAdapter:
         # Write queue
         self._write_queue = WriteQueueWorker(executor=self._execute_write_op)
         self._write_queue.start()
+
+        # FK cache for validation lookups
+        self._fk_cache: dict[str, tuple[set[str], float]] = {}
 
         self._connected = False
 
@@ -328,10 +332,19 @@ class SheetsAdapter:
             data: Dictionnaire ou modèle Invoice avec les champs facture
 
         Raises:
-            SheetValidationError: Si les champs requis manquent.
+            SheetValidationError: Si les champs requis manquent ou si client_id n'existe pas.
         """
         # Convert Pydantic model to dict if needed
         data_dict = data if isinstance(data, dict) else data.model_dump()  # type: ignore[assignment]
+
+        # Validate client_id FK
+        client_id: str = str(data_dict.get("client_id", ""))
+        if not self._validate_fk(client_id, SHEET_CLIENTS, "client_id"):
+            raise SheetValidationError(
+                f"Foreign key violation: client_id '{client_id}' not found in Clients sheet",
+                sheet_name=SHEET_FACTURES,
+                field_name="client_id",
+            )
 
         headers = get_headers(SHEET_FACTURES)
         values = self._dict_to_row(data_dict, headers, SHEET_FACTURES)  # type: ignore[arg-type]
@@ -343,13 +356,13 @@ class SheetsAdapter:
     def add_transactions(self, data: list[dict[str, Any] | Any]) -> None:
         """Ajoute une ou plusieurs transactions aux données Transactions.
 
-        Déduplique par indy_id avant d'ajouter.
+        Déduplique par indy_id avant d'ajouter. Valide tous les facture_id FKs atomiquement.
 
         Args:
             data: Liste de dictionnaires ou modèles Transaction avec les champs transaction
 
         Raises:
-            SheetValidationError: Si les champs requis manquent.
+            SheetValidationError: Si les champs requis manquent ou si facture_id n'existe pas.
         """
         if not data:
             return
@@ -362,6 +375,17 @@ class SheetsAdapter:
             else:
                 result = item.model_dump()  # type: ignore[attr-defined]
                 data_list.append(result)  # type: ignore[arg-type]
+
+        # Validate facture_id FKs BEFORE dedup (atomic: all or nothing)
+        for i, d in enumerate(data_list):
+            facture_id: str = str(d.get("facture_id", ""))
+            if not self._validate_fk(facture_id, SHEET_FACTURES, "facture_id"):
+                raise SheetValidationError(
+                    f"Foreign key violation: facture_id '{facture_id}' not found in Factures sheet",
+                    sheet_name=SHEET_TRANSACTIONS,
+                    field_name="facture_id",
+                    row_index=i + 1,
+                )
 
         # Dedup by indy_id: first against existing, then within input
         existing = self.get_all_transactions()
@@ -401,7 +425,18 @@ class SheetsAdapter:
 
         Raises:
             WorksheetNotFoundError: Si la facture n'est pas trouvée.
+            SheetValidationError: Si client_id dans updates n'existe pas.
         """
+        # Validate client_id FK if updating it
+        if "client_id" in updates:
+            client_id: str = str(updates["client_id"])
+            if not self._validate_fk(client_id, SHEET_CLIENTS, "client_id"):
+                raise SheetValidationError(
+                    f"Foreign key violation: client_id '{client_id}' not found in Clients sheet",
+                    sheet_name=SHEET_FACTURES,
+                    field_name="client_id",
+                )
+
         df = self.get_all_invoices()
         mask = df["facture_id"] == facture_id
         if not mask.any():
@@ -573,6 +608,63 @@ class SheetsAdapter:
         else:
             self._cache.pop(sheet_name, None)
             logger.debug(f"Cache cleared for sheet: {sheet_name}")
+
+    def _validate_fk(self, fk_value: str, target_sheet: str, target_column: str) -> bool:
+        """Valide qu'une clé étrangère existe dans la cible.
+
+        Implémente un cache TTL pour éviter les appels répétés à l'API Sheets.
+        Les valeurs vides (nullable FKs) sont toujours valides.
+
+        Args:
+            fk_value: Valeur à chercher
+            target_sheet: Nom du sheet cible (ex: "Clients")
+            target_column: Nom de la colonne cible (ex: "client_id")
+
+        Returns:
+            True si fk_value existe ou est vide (nullable), False sinon.
+        """
+        # Nullable FKs: empty values are always valid
+        if not fk_value or fk_value.strip() == "":
+            return True
+
+        cache_key = f"{target_sheet}:{target_column}"
+        current_time = time.time()
+
+        # Check cache validity
+        if cache_key in self._fk_cache:
+            cached_values, cached_at = self._fk_cache[cache_key]
+            age = current_time - cached_at
+            if age < self._settings.sheets_cache_ttl:
+                # Cache hit
+                return fk_value in cached_values
+
+        # Cache miss: read from sheet using the appropriate getter
+        if target_sheet == SHEET_CLIENTS:
+            df = self.get_all_clients()
+        elif target_sheet == SHEET_FACTURES:
+            df = self.get_all_invoices()
+        elif target_sheet == SHEET_TRANSACTIONS:
+            df = self.get_all_transactions()
+        else:
+            df = self._read_sheet(target_sheet)
+
+        if target_column not in df.columns:
+            logger.warning(
+                f"Column {target_column} not found in {target_sheet}",
+                extra={"sheet": target_sheet, "column": target_column},
+            )
+            return False
+
+        # Extract unique values and cache them
+        values_set: set[str] = set(df[target_column].to_list())
+        self._fk_cache[cache_key] = (values_set, current_time)
+
+        result = fk_value in values_set
+        logger.debug(
+            f"FK validation: {target_sheet}.{target_column}={fk_value}",
+            extra={"result": result, "cache_key": cache_key},
+        )
+        return result
 
     def _dict_to_row(self, data: dict[str, Any], headers: list[str], sheet_name: str) -> list[str]:
         """Convertit un dictionnaire en une liste ordonnée de valeurs.
