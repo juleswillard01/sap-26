@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     indy_email: str = ""
     indy_password: str = ""
 
+    # Gmail IMAP (for 2FA code extraction during Indy automation)
+    gmail_imap_user: str = ""
+    gmail_imap_password: str = ""
+
     # AIS (Avance Immédiate Services)
     ais_email: str = ""
     ais_password: str = ""
