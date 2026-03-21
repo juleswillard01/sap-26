@@ -1,11 +1,25 @@
-# Lint & Typecheck
+---
+description: Lint + format + types — ruff, pyright
+---
 
-Exécuter tous les outils de qualité statique.
+# /lint — Qualité Code
 
-1. `ruff check src tests` — linting
-2. `ruff format --check src tests` — format
-3. `pyright src` — types strict
-4. Pour chaque erreur : expliquer et proposer le fix concret
-5. Appliquer les fixes automatiques si possible : `ruff check --fix` et `ruff format`
+Action : $ARGUMENTS
 
-Focus sur : $ARGUMENTS
+## Commandes
+
+### tout
+1. `uv run ruff check src/ tests/`
+2. `uv run ruff format --check src/ tests/`
+3. `uv run pyright src/`
+
+### fix
+1. `uv run ruff check --fix src/ tests/`
+2. `uv run ruff format src/ tests/`
+
+### types
+`uv run pyright src/`
+
+### [fichier]
+1. `uv run ruff check $ARGUMENTS`
+2. `uv run pyright $ARGUMENTS`

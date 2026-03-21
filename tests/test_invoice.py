@@ -3,10 +3,10 @@
 import pytest
 
 from src.models.invoice import (
+    VALID_TRANSITIONS,
     InvalidTransitionError,
     Invoice,
     InvoiceStatus,
-    VALID_TRANSITIONS,
 )
 
 

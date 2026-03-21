@@ -19,6 +19,11 @@ dependencies = [
     "google-auth>=2.30",
     "playwright>=1.44",
     "weasyprint>=62",
+    "polars[all]>=1.0",
+    "cachetools>=5.3",
+    "pybreaker>=1.2",
+    "tenacity>=8.3",
+    "patito>=0.8.6",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +54,9 @@ include = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-x --tb=short -q"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [build-system]
 requires = ["hatchling"]

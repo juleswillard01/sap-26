@@ -1,4 +1,6 @@
-"""Modèle Facture avec machine à états."""
+"""Modele Facture avec machine a etats."""
+
+from __future__ import annotations
 
 from enum import StrEnum
 
@@ -6,7 +8,7 @@ from pydantic import BaseModel
 
 
 class InvoiceStatus(StrEnum):
-    """États possibles d'une facture — CDC §2.1."""
+    """Etats possibles d'une facture — CDC §2.1."""
 
     BROUILLON = "BROUILLON"
     SOUMIS = "SOUMIS"
@@ -21,7 +23,11 @@ class InvoiceStatus(StrEnum):
     ANNULE = "ANNULE"
 
 
-# Transitions valides : {état_source: [états_destination]}
+class InvalidTransitionError(ValueError):
+    """Transition d'etat invalide — CDC §2.2."""
+
+
+# Transitions valides : {etat_source: [etats_destination]}
 VALID_TRANSITIONS: dict[InvoiceStatus, list[InvoiceStatus]] = {
     InvoiceStatus.BROUILLON: [InvoiceStatus.SOUMIS, InvoiceStatus.ANNULE],
     InvoiceStatus.SOUMIS: [InvoiceStatus.CREE, InvoiceStatus.ERREUR],
@@ -32,38 +38,40 @@ VALID_TRANSITIONS: dict[InvoiceStatus, list[InvoiceStatus]] = {
     InvoiceStatus.ERREUR: [InvoiceStatus.BROUILLON],
     InvoiceStatus.EXPIRE: [InvoiceStatus.BROUILLON],
     InvoiceStatus.REJETE: [InvoiceStatus.BROUILLON],
+    InvoiceStatus.RAPPROCHE: [],
+    InvoiceStatus.ANNULE: [],
 }
 
 
 class Invoice(BaseModel):
-    """Représente une facture SAP."""
+    """Represente une facture SAP."""
 
     facture_id: str
     client_id: str
-    nature_code: str
-    quantite: float
-    montant_unitaire: float
+    nature_code: str = ""
+    quantite: float = 0.0
+    montant_unitaire: float = 0.0
     statut: InvoiceStatus = InvoiceStatus.BROUILLON
     description: str = ""
     urssaf_demande_id: str | None = None
 
     @property
     def montant_total(self) -> float:
-        """Montant total = quantité × prix unitaire."""
+        """Montant total = quantite x prix unitaire."""
         return self.quantite * self.montant_unitaire
 
     def can_transition_to(self, new_status: InvoiceStatus) -> bool:
-        """Vérifie si la transition est valide — CDC §2.2."""
+        """Verifie si la transition est valide — CDC §2.2."""
         allowed = VALID_TRANSITIONS.get(self.statut, [])
         return new_status in allowed
 
     def transition_to(self, new_status: InvoiceStatus) -> None:
-        """Effectue la transition d'état.
+        """Effectue la transition d'etat.
 
         Raises:
-            ValueError: Si la transition est invalide.
+            InvalidTransitionError: Si la transition est invalide.
         """
         if not self.can_transition_to(new_status):
-            msg = f"Transition invalide : {self.statut} → {new_status}"
-            raise ValueError(msg)
+            msg = f"Transition invalide : {self.statut} -> {new_status}"
+            raise InvalidTransitionError(msg)
         self.statut = new_status

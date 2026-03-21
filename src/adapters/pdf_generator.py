@@ -1,16 +1,20 @@
-"""Génération PDF factures via WeasyPrint — CDC §3.3."""
+"""Export de rapports — Phase 3.
 
-from pathlib import Path
+AIS génère les factures PDF. SAP-Facture peut générer
+des rapports CSV et attestations fiscales (futur).
+"""
+
+from __future__ import annotations
 
 
-def generate_invoice_pdf(invoice_data: dict[str, str], output_path: Path) -> Path:
-    """Génère un PDF de facture.
+class ExportService:
+    """Service d'export de données — Phase 3."""
 
-    Args:
-        invoice_data: Données de la facture.
-        output_path: Chemin de destination du PDF.
+    def export_csv(self, data: list[dict[str, str]], path: str) -> None:
+        """Exporte des données en CSV.
 
-    Returns:
-        Chemin du PDF généré.
-    """
-    raise NotImplementedError("À implémenter — CDC §3.3")
+        Args:
+            data: Données à exporter.
+            path: Chemin de destination.
+        """
+        raise NotImplementedError("Phase 3")

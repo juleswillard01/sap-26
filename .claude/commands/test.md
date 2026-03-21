@@ -1,11 +1,32 @@
-# Test Runner
+---
+description: Suite de tests — unit, integration, couverture, filtre
+---
 
-Exécuter les tests et analyser les résultats.
+# /test — Tests
 
-1. Lancer `make test` (fail fast)
-2. Si échecs : analyser les erreurs, identifier la cause root
-3. Lancer `make test-cov` pour le rapport de couverture
-4. Identifier les modules sous le seuil de 80%
-5. Suggérer les tests manquants pour atteindre la couverture cible
+Action : $ARGUMENTS
 
-Focus sur : $ARGUMENTS
+## Commandes
+
+### tout
+`uv run pytest tests/ -v --tb=short`
+
+### unit
+`uv run pytest tests/ -v --tb=short -m "not integration"`
+
+### integration
+`uv run pytest tests/ -v --tb=short -m integration`
+
+### couverture
+`uv run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=80`
+
+### [pattern]
+`uv run pytest tests/ -k "$ARGUMENTS" -v --tb=short`
+
+### derniers
+`uv run pytest tests/ --lf -v --tb=short`
+
+## Seuils
+- Coverage minimum : 80%
+- Timeout par test : 30s
+- Mode : unit tests seulement en auto (hook PostToolUse)
