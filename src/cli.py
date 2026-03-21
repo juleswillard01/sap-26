@@ -194,7 +194,49 @@ def sync(ctx: click.Context) -> None:
 @click.pass_context
 def reconcile(ctx: click.Context) -> None:
     """Lancer le lettrage bancaire."""
-    raise NotImplementedError("À implémenter — CDC §5")
+    from src.adapters.indy_adapter import IndyBrowserAdapter
+    from src.adapters.sheets_adapter import SheetsAdapter
+    from src.services.bank_reconciliation import ReconciliationService
+
+    verbose = ctx.obj.get("verbose", False)
+    dry_run = ctx.obj.get("dry_run", False)
+
+    try:
+        try:
+            settings = Settings()
+        except ValueError:
+            settings = None
+
+        sheets = SheetsAdapter(settings)
+        indy = IndyBrowserAdapter(settings)
+        service = ReconciliationService(indy_adapter=indy, sheets_adapter=sheets)
+
+        result = service.reconcile()
+
+        num_imported = result.get("transactions_imported", 0)
+        num_auto = result.get("auto_matched", 0)
+        num_verify = result.get("to_verify", 0)
+
+        if verbose or dry_run:
+            click.echo(
+                f"Reconcile summary: {num_imported} transactions imported, "
+                f"{num_auto} auto-lettrées, {num_verify} à vérifier"
+            )
+        else:
+            click.echo(
+                f"Reconcile: {num_imported} imported, "
+                f"{num_auto} auto-matched, {num_verify} to verify"
+            )
+
+        ctx.exit(0)
+
+    except Exit:
+        raise
+    except Exception as e:
+        logger.error("Reconcile failed: %s", e, exc_info=True)
+        if verbose:
+            click.echo(f"Erreur: {e}", err=True)
+        ctx.exit(1)
 
 
 @main.command()
