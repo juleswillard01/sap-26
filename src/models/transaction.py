@@ -64,13 +64,21 @@ def compute_matching_score(
     transaction_date: date,
     transaction_label: str,
 ) -> int:
-    """Calcule le score de confiance pour le lettrage — CDC §3.2."""
+    """Calcule le score de confiance pour le lettrage — CDC §3.2.
+
+    Fenêtre ±5 jours : transactions hors cette fenêtre retournent 0.
+    """
+    delta_days = abs((transaction_date - invoice_payment_date).days)
+
+    # Fenêtre ±5 jours — CDC §3.2
+    if delta_days > 5:
+        return 0
+
     score = 0
 
     if abs(invoice_amount - transaction_amount) < 0.01:
         score += 50
 
-    delta_days = abs((transaction_date - invoice_payment_date).days)
     if delta_days <= 3:
         score += 30
 

@@ -195,13 +195,27 @@ class PaymentTracker:
         )
 
     def write_status_changes_batch(self, changes: list[dict[str, Any]]) -> None:
-        """Write multiple status changes to Sheets.
+        """Write multiple status changes to Sheets using batch API.
 
         Args:
-            changes: List of change dicts
+            changes: List of change dicts with facture_id and nouveau_statut
         """
-        for change in changes:
-            self.write_status_change_to_sheets(change)
+        if not changes:
+            return
+
+        # Convert changes to format expected by update_invoices_batch
+        updates = [
+            {"facture_id": change["facture_id"], "statut": change["nouveau_statut"]}
+            for change in changes
+            if change.get("facture_id") and change.get("nouveau_statut")
+        ]
+
+        if updates:
+            count = self._sheets_adapter.update_invoices_batch(updates)
+            logger.info(
+                "Status changes batch written to Sheets",
+                extra={"count": count, "updates_count": len(updates)},
+            )
 
 
 def sync_statuses_from_ais(

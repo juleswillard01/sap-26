@@ -623,6 +623,7 @@ class TestWriteChangesToSheets:
         tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
 
         # Arrange
+        mock_sheets_adapter.update_invoices_batch.return_value = 2
         changes = [
             {"facture_id": "FAC-001", "ancien_statut": "CREE", "nouveau_statut": "EN_ATTENTE"},
             {"facture_id": "FAC-002", "ancien_statut": "EN_ATTENTE", "nouveau_statut": "VALIDE"},
@@ -632,4 +633,10 @@ class TestWriteChangesToSheets:
         tracker.write_status_changes_batch(changes)
 
         # Assert
-        assert mock_sheets_adapter.update_invoice.call_count == 2
+        mock_sheets_adapter.update_invoices_batch.assert_called_once()
+        called_updates = mock_sheets_adapter.update_invoices_batch.call_args[0][0]
+        assert len(called_updates) == 2
+        assert called_updates[0]["facture_id"] == "FAC-001"
+        assert called_updates[0]["statut"] == "EN_ATTENTE"
+        assert called_updates[1]["facture_id"] == "FAC-002"
+        assert called_updates[1]["statut"] == "VALIDE"

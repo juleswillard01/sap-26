@@ -226,7 +226,7 @@ class TestGetAnnualSummary:
         from src.services.cotisations_service import CotisationsService
 
         mock_sheets = MagicMock()
-        # 12 months × 1000€ = 12000€ CA
+        # 12 months x 1000€ = 12000€ CA
         invoices = [
             {
                 "facture_id": f"F{mois:02d}01",
@@ -430,7 +430,7 @@ class TestCalculateIRSimulation:
         from src.services.cotisations_service import CotisationsService
 
         mock_sheets = MagicMock()
-        # 12 × 1000€ invoices
+        # 12 x 1000€ invoices
         invoices = [
             {
                 "facture_id": f"F{mois:02d}01",

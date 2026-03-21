@@ -196,9 +196,9 @@ class SheetsAdapter:
                     schema = get_schema(sheet_name)
                     return pl.DataFrame(schema=schema)
                 df: pl.DataFrame = pl.DataFrame(records)
-                # Cast to correct schema
+                # Cast to correct schema (strict=False handles empty strings in date fields)
                 schema = get_schema(sheet_name)
-                df = df.cast(schema)  # type: ignore[arg-type]
+                df = df.cast(schema, strict=False)  # type: ignore[arg-type]
                 return df
 
             df: pl.DataFrame = _fetch()  # type: ignore[assignment]
@@ -378,7 +378,8 @@ class SheetsAdapter:
 
         # Validate facture_id FKs BEFORE dedup (atomic: all or nothing)
         for i, d in enumerate(data_list):
-            facture_id: str = str(d.get("facture_id", ""))
+            facture_id_raw = d.get("facture_id")
+            facture_id: str = str(facture_id_raw) if facture_id_raw else ""
             if not self._validate_fk(facture_id, SHEET_FACTURES, "facture_id"):
                 raise SheetValidationError(
                     f"Foreign key violation: facture_id '{facture_id}' not found in Factures sheet",
@@ -503,6 +504,218 @@ class SheetsAdapter:
         self._invalidate_cache(SHEET_TRANSACTIONS)
         logger.info(f"Updated transaction: {transaction_id}")
 
+    def update_invoices_batch(self, updates: list[dict[str, Any]]) -> int:
+        """Batch update multiple invoices in a single API call.
+
+        Deduplicates by facture_id (last update wins).
+        Returns count of rows updated.
+
+        Args:
+            updates: List of dicts, each with 'facture_id' + fields to update
+
+        Returns:
+            Count of unique facture_ids updated
+
+        Raises:
+            WorksheetNotFoundError: If a facture_id is not found.
+        """
+        if not updates:
+            return 0
+
+        # Dedup by facture_id: last occurrence wins
+        deduped: dict[str, dict[str, Any]] = {}
+        for update_dict in updates:
+            facture_id = update_dict.get("facture_id")
+            if facture_id:
+                deduped[facture_id] = update_dict
+
+        if not deduped:
+            return 0
+
+        # Get all invoices to find row indices
+        df = self.get_all_invoices()
+        headers = get_headers(SHEET_FACTURES)
+        worksheet = self._get_worksheet(SHEET_FACTURES)
+
+        # Build list of (row_index, fields_dict) for rows to update
+        rows_to_update: list[tuple[int, dict[str, Any]]] = []
+        for facture_id, update_dict in deduped.items():
+            mask = df["facture_id"] == facture_id
+            if not mask.any():
+                raise WorksheetNotFoundError(
+                    f"Invoice {facture_id} not found",
+                    sheet_name=SHEET_FACTURES,
+                )
+            idx = mask.arg_max()
+            if idx is None:
+                raise WorksheetNotFoundError(
+                    f"Invoice {facture_id} not found",
+                    sheet_name=SHEET_FACTURES,
+                )
+            row_index: int = int(idx) + 2  # +1 for header, +1 for 1-based indexing
+            rows_to_update.append((row_index, update_dict))
+
+        # Build batch update: map of cell coords to values for single API call
+        cells_map: dict[tuple[int, int], str] = {}  # (row, col) -> value
+        for row_index, update_dict in rows_to_update:
+            for col_name, value in update_dict.items():
+                if col_name not in headers:
+                    logger.warning(f"Skipping unknown column {col_name} in {SHEET_FACTURES}")
+                    continue
+                col_index: int = headers.index(col_name) + 1  # 1-based
+                cells_map[(row_index, col_index)] = str(value) if value else ""
+
+        # Execute single batch update via worksheet.update() with range notation
+        if cells_map:
+            # Find bounds
+            rows = [r for r, _ in cells_map]
+            cols = [c for _, c in cells_map]
+            min_row, max_row = min(rows), max(rows)
+            min_col, max_col = min(cols), max(cols)
+
+            # Build 2D values array for the bounding box
+            num_rows = max_row - min_row + 1
+            num_cols = max_col - min_col + 1
+            values: list[list[str]] = [["" for _ in range(num_cols)] for _ in range(num_rows)]
+
+            # Populate with cell values
+            for (row, col), value in cells_map.items():
+                values[row - min_row][col - min_col] = value
+
+            # Build range notation (e.g., "A2:Q11")
+            start_letter = chr(64 + min_col)
+            end_letter = chr(64 + max_col)
+            range_notation = f"{start_letter}{min_row}:{end_letter}{max_row}"
+
+            # Single API call
+            worksheet.update(values=values, range_name=range_notation)  # type: ignore[attr-defined]
+            logger.debug(
+                f"Updated {len(cells_map)} cells in batch for {SHEET_FACTURES} ({range_notation})"
+            )
+
+        self._invalidate_cache(SHEET_FACTURES)
+        logger.info(f"Batch updated {len(deduped)} invoices")
+        return len(deduped)
+
+    def update_transactions_batch(self, updates: list[dict[str, Any]]) -> int:
+        """Batch update multiple transactions in a single API call.
+
+        Deduplicates by transaction_id (last update wins).
+        REJECTS updates to immutable fields: date_valeur, montant, libelle, type,
+        source, indy_id, date_import.
+        ALLOWS updates to: facture_id, statut_lettrage.
+        Returns count of rows updated.
+
+        Args:
+            updates: List of dicts, each with 'transaction_id' + fields to update
+
+        Returns:
+            Count of unique transaction_ids updated
+
+        Raises:
+            SheetValidationError: If attempting to modify immutable fields.
+            WorksheetNotFoundError: If a transaction_id is not found.
+        """
+        if not updates:
+            return 0
+
+        # Define immutable fields
+        immutable_fields = {
+            "date_valeur",
+            "montant",
+            "libelle",
+            "type",
+            "source",
+            "indy_id",
+            "date_import",
+        }
+
+        # Validate no immutable fields are being modified
+        for update_dict in updates:
+            for field in immutable_fields:
+                if field in update_dict:
+                    raise SheetValidationError(
+                        f"Cannot modify immutable field '{field}' in Transactions",
+                        sheet_name=SHEET_TRANSACTIONS,
+                        field_name=field,
+                    )
+
+        # Dedup by transaction_id: last occurrence wins
+        deduped: dict[str, dict[str, Any]] = {}
+        for update_dict in updates:
+            transaction_id = update_dict.get("transaction_id")
+            if transaction_id:
+                deduped[transaction_id] = update_dict
+
+        if not deduped:
+            return 0
+
+        # Get all transactions to find row indices
+        df = self.get_all_transactions()
+        headers = get_headers(SHEET_TRANSACTIONS)
+        worksheet = self._get_worksheet(SHEET_TRANSACTIONS)
+
+        # Build list of (row_index, fields_dict) for rows to update
+        rows_to_update: list[tuple[int, dict[str, Any]]] = []
+        for transaction_id, update_dict in deduped.items():
+            mask = df["transaction_id"] == transaction_id
+            if not mask.any():
+                raise WorksheetNotFoundError(
+                    f"Transaction {transaction_id} not found",
+                    sheet_name=SHEET_TRANSACTIONS,
+                )
+            idx = mask.arg_max()
+            if idx is None:
+                raise WorksheetNotFoundError(
+                    f"Transaction {transaction_id} not found",
+                    sheet_name=SHEET_TRANSACTIONS,
+                )
+            row_index: int = int(idx) + 2  # +1 for header, +1 for 1-based indexing
+            rows_to_update.append((row_index, update_dict))
+
+        # Build batch update: map of cell coords to values for single API call
+        cells_map: dict[tuple[int, int], str] = {}  # (row, col) -> value
+        for row_index, update_dict in rows_to_update:
+            for col_name, value in update_dict.items():
+                if col_name not in headers:
+                    logger.warning(f"Skipping unknown column {col_name} in {SHEET_TRANSACTIONS}")
+                    continue
+                col_index: int = headers.index(col_name) + 1  # 1-based
+                cells_map[(row_index, col_index)] = str(value) if value else ""
+
+        # Execute single batch update via worksheet.update() with range notation
+        if cells_map:
+            # Find bounds
+            rows = [r for r, _ in cells_map]
+            cols = [c for _, c in cells_map]
+            min_row, max_row = min(rows), max(rows)
+            min_col, max_col = min(cols), max(cols)
+
+            # Build 2D values array for the bounding box
+            num_rows = max_row - min_row + 1
+            num_cols = max_col - min_col + 1
+            values: list[list[str]] = [["" for _ in range(num_cols)] for _ in range(num_rows)]
+
+            # Populate with cell values
+            for (row, col), value in cells_map.items():
+                values[row - min_row][col - min_col] = value
+
+            # Build range notation (e.g., "A2:Q11")
+            start_letter = chr(64 + min_col)
+            end_letter = chr(64 + max_col)
+            range_notation = f"{start_letter}{min_row}:{end_letter}{max_row}"
+
+            # Single API call
+            worksheet.update(values=values, range_name=range_notation)  # type: ignore[attr-defined]
+            logger.debug(
+                f"Updated {len(cells_map)} cells in batch for "
+                f"{SHEET_TRANSACTIONS} ({range_notation})"
+            )
+
+        self._invalidate_cache(SHEET_TRANSACTIONS)
+        logger.info(f"Batch updated {len(deduped)} transactions")
+        return len(deduped)
+
     def init_spreadsheet(self) -> None:
         """Crée un spreadsheet avec 8 worksheets, headers, et formules.
 
@@ -538,44 +751,74 @@ class SheetsAdapter:
                 worksheet = worksheets_created[sheet_name]
                 # Add example formulas for balance/metrics/cotisations/fiscal
                 if sheet_name == SHEET_LETTRAGE:
-                    # Lettrage formulas: score_confiance = IF(ecart=0, 100, 0)
-                    worksheet.append_row(["", "", "", "", "", "=IF(E2=0,100,0)", ""])
-                elif sheet_name == SHEET_BALANCES:
-                    # Balances: sum formulas
+                    # Lettrage formulas: score = 50 (montant match) + 30 (date <=3j) + 20 (URSSAF)
+                    # facture_id references Factures sheet, txn_id references Transactions sheet
+                    facture_id_formula = '=IFERROR(VLOOKUP(A2,Factures!$A:$A,1,FALSE),"")'
+                    txn_id_formula = '=IFERROR(VLOOKUP(C2,Transactions!$A:$A,1,FALSE),"")'
+                    score_formula = (
+                        '=IF(B2=D2,50,0)+IF(ABS(E2)<=3,30,0)+IF(ISNUMBER(SEARCH("URSSAF",C2)),20,0)'
+                    )
+                    # Statut formula determines lettrage status based on score
+                    statut_formula = (
+                        '=IF(F2>=80,"LETTRE_AUTO",IF(F2>0,"A_VERIFIER","PAS_DE_MATCH"))'
+                    )
                     worksheet.append_row(
                         [
-                            "Totals",
-                            "=COUNTA(B:B)-1",
-                            "=SUM(C:C)",
-                            "=SUM(D:D)",
-                            "=SUM(E:E)",
-                            "=COUNTA(F:F)-1",
-                            "=COUNTA(G:G)-1",
+                            facture_id_formula,
+                            "",
+                            txn_id_formula,
+                            "",
+                            "",
+                            score_formula,
+                            statut_formula,
+                        ]
+                    )
+                elif sheet_name == SHEET_BALANCES:
+                    # Balances: SUMIFS for ca_total (filter by PAYE status)
+                    worksheet.append_row(
+                        [
+                            "2026-01",
+                            '=COUNTIFS(Factures!$K:$K,"PAYE",Factures!$H:$H,A2)',
+                            '=SUMIFS(Factures!montant_total,Factures!statut,"PAYE",Factures!date_fin,A2)',
+                            "=SUMIFS(Transactions!montant,Transactions!date_import,A2)",
+                            "=C2-D2",
+                            '=COUNTIFS(Factures!$K:$K,"<>PAYE",Factures!$H:$H,A2)',
+                            '=COUNTIFS(Factures!$K:$K,"EN_ATTENTE",Factures!$H:$H,A2)',
                         ]
                     )
                 elif sheet_name == SHEET_METRICS_NOVA:
-                    # Metrics: sum formula for heures_effectuees
-                    worksheet.append_row(["", "", "=SUM(C:C)", "", "=SUM(E:E)", ""])
-                elif sheet_name == SHEET_COTISATIONS:
-                    # Cotisations: taux from settings, montant_charges = ca * taux
+                    # Metrics NOVA: heures_effectuees = SUM quantite WHERE type_unite=HEURE
                     worksheet.append_row(
                         [
-                            "Janvier",
-                            0,
-                            f"={self._settings.taux_charges_micro}",
-                            "=B2*C2",
-                            "",
-                            "=SUM(B:B)",
+                            "2026-Q1",
+                            "=1",
+                            '=SUMIF(Factures!$C:$C,"HEURE",Factures!$E:$E)',
+                            '=SUMPRODUCT((Factures!$C:$C="HEURE")/COUNTIF(Factures!$B:$B,Factures!$B:$B&""))',
+                            '=SUMIFS(Factures!$G:$G,Factures!$C:$C,"HEURE")',
+                            "=DATE(2026,4,15)",
+                        ]
+                    )
+                elif sheet_name == SHEET_COTISATIONS:
+                    # Cotisations: taux_charges = 0.258, montant_charges = ca_encaisse * 0.258
+                    worksheet.append_row(
+                        [
+                            "2026-01",
+                            "0",
+                            "=0.258",
+                            "=B2*0.258",
+                            "=DATE(2026,2,15)",
+                            "=SUM(B$2:B2)",
                             "=B2-D2",
                         ]
                     )
                 elif sheet_name == SHEET_FISCAL_IR:
-                    # Fiscal: abattement = ca_micro * 0.34, revenu_imposable
+                    # Fiscal IR: abattement = ca_micro * 0.34
+                    # revenu_imposable = ca_micro - abattement
                     worksheet.append_row(
                         [
-                            0,
-                            0,
-                            0,
+                            "0",
+                            "=24000",
+                            "=MIN(A2,B2)",
                             "=C2*0.34",
                             "=C2-D2",
                             "",

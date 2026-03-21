@@ -7,13 +7,7 @@ n'est pas encore implanté.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-
-try:
-    from datetime import UTC
-except ImportError:
-    from datetime import timezone
-    UTC = timezone.utc
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from src.services.notification_service import (

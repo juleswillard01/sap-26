@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from tenacity import RetryError
 
@@ -596,11 +597,13 @@ class TestAISAPIAdapterConnect:
         """Vérifie que connect() log le succès."""
         adapter = AISAPIAdapter(settings)
 
-        with patch.object(adapter, "_get_token_with_retry", return_value="token123"):
-            with patch("src.adapters.ais_adapter.logger") as mock_logger:
-                adapter.connect()
+        with (
+            patch.object(adapter, "_get_token_with_retry", return_value="token123"),
+            patch("src.adapters.ais_adapter.logger") as mock_logger,
+        ):
+            adapter.connect()
 
-                mock_logger.info.assert_called_with("AIS login successful")
+            mock_logger.info.assert_called_with("AIS login successful")
 
 
 class TestAISAPIAdapterGetClients:
@@ -730,9 +733,11 @@ class TestAISAPIAdapterGetInvoiceStatus:
             {"demande_id": "DEMANDE-001", "statut": "PAYEE", "montant": 500.00},
         ]
 
-        with patch.object(adapter, "get_invoice_statuses", return_value=mock_invoices):
-            with pytest.raises(ValueError, match="non trouvée"):
-                adapter.get_invoice_status("INEXISTANT")
+        with (
+            patch.object(adapter, "get_invoice_statuses", return_value=mock_invoices),
+            pytest.raises(ValueError, match="non trouvée"),
+        ):
+            adapter.get_invoice_status("INEXISTANT")
 
 
 class TestAISAPIAdapterSubmitInvoice:

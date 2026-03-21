@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # Google Sheets
     google_sheets_spreadsheet_id: str = ""
     google_service_account_file: Path = Path("./credentials/service_account.json")
-    google_scopes: list[str] = ["spreadsheets", "drive"]
+    google_scopes: str = "spreadsheets,drive"
     sheets_cache_ttl: int = 30
     sheets_rate_limit: int = 60
     sheets_timeout: int = 30
@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     gmail_imap_user: str = ""
     gmail_imap_password: str = ""
 
+    # Gmail OAuth2 API (alternative to IMAP, recommended)
+    gmail_oauth_client_file: str = "credentials/gmail_oauth.json"
+    gmail_oauth_token_file: str = "credentials/gmail_token.json"
+
     # AIS (Avance Immédiate Services)
     ais_email: str = ""
     ais_password: str = ""
@@ -62,7 +66,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
     export_output_dir: Path = Path("./io/exports")
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 def get_settings() -> Settings:

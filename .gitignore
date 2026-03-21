@@ -1,7 +1,14 @@
 .env
 .env.*
 !.env.example
+
+# Credentials — NEVER commit
 credentials/
+credentials/*.json
+# Gmail OAuth2 credentials (NEVER commit)
+credentials/gmail_oauth.json
+credentials/gmail_token.json
+
 *.json
 !package.json
 __pycache__/

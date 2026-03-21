@@ -1,0 +1,25 @@
+Subject: ALERTE — Facture {{ facture_id }} expirée
+
+---
+
+ALERTE IMPORTANTE
+
+La facture suivante a expiré sans validation du client:
+
+Facture: {{ facture_id }}
+Client: {{ client_name }}
+Montant: {{ montant }}€
+Date d'expiration: {{ expired_at }}
+
+Action requise:
+1. Contactez le client pour relancer sa validation
+2. Vous pouvez renvoyer la facture pour qu'elle soit revalidée
+3. Vérifiez les coordonnées email du client
+
+La facture reste en attente de validation.
+Aucun paiement ne sera traité jusqu'à sa validation.
+
+Contactez le support si vous avez besoin d'assistance.
+
+Cordialement,
+Système SAP-Facture

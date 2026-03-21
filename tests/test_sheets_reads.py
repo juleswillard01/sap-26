@@ -748,7 +748,7 @@ class TestSheetsAdapterEdgeCases:
         sheets_adapter: SheetsAdapter,
         mock_gspread: Any,
     ) -> None:
-        """Invalid data type for field raises error during DataFrame construction."""
+        """Malformed date field is coerced to null (strict=False behavior)."""
         mock_worksheet = MagicMock()
         mock_gspread.worksheet.return_value = mock_worksheet
         # Provide malformed date that can't be parsed
@@ -770,8 +770,11 @@ class TestSheetsAdapterEdgeCases:
         ]
         mock_worksheet.get_all_records.return_value = bad_data
 
-        with pytest.raises((TypeError, ValueError, pl.exceptions.InvalidOperationError)):
-            sheets_adapter.get_all_clients()
+        # With strict=False, malformed dates are coerced to null, not raising error
+        df = sheets_adapter.get_all_clients()
+        assert len(df) == 1
+        # date_inscription should be null due to malformed input
+        assert df["date_inscription"][0] is None
 
     def test_missing_required_column(
         self,

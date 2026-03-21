@@ -15,13 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-
-try:
-    from datetime import UTC
-except ImportError:
-    UTC = timezone.utc
 
 if TYPE_CHECKING:
     from pathlib import Path
