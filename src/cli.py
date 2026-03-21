@@ -7,7 +7,9 @@ import logging
 import click
 from click.exceptions import Exit
 
+from src.adapters.sheets_adapter import SheetsAdapter
 from src.config import Settings
+from src.services.nova_reporting import NovaService
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,6 @@ def main(ctx: click.Context, verbose: bool, dry_run: bool) -> None:
 @click.pass_context
 def init(ctx: click.Context, spreadsheet_id: str | None) -> None:
     """Créer le spreadsheet avec 8 onglets et headers."""
-    from src.adapters.sheets_adapter import SheetsAdapter
 
     settings = Settings()
     if spreadsheet_id:
@@ -50,7 +51,6 @@ def sync(ctx: click.Context) -> None:
 
     from src.adapters.ais_adapter import AISAdapter
     from src.adapters.email_notifier import EmailNotifier
-    from src.adapters.sheets_adapter import SheetsAdapter
 
     verbose = ctx.obj.get("verbose", False)
     dry_run = ctx.obj.get("dry_run", False)
@@ -215,6 +215,35 @@ def reconcile(ctx: click.Context) -> None:
     """Lancer le lettrage bancaire."""
     # RED phase: Still NotImplementedError
     raise NotImplementedError("À implémenter — CDC §5")
+
+
+@main.command()
+@click.argument("quarter", required=False)
+@click.pass_context
+def nova(ctx: click.Context, quarter: str | None) -> None:
+    """Générer le rapport NOVA trimestriel."""
+    settings = Settings()
+    sheets = SheetsAdapter(settings)
+    service = NovaService(sheets=sheets)
+
+    # If no quarter provided, use current quarter
+    if not quarter:
+        from datetime import datetime
+
+        now = datetime.now()
+        q = (now.month - 1) // 3 + 1
+        quarter = f"Q{q}_{now.year}"
+
+    # Normalize quarter format (handle Q1-2026 and Q1_2026)
+    quarter = quarter.replace("-", "_")
+
+    # Generate NOVA data for the quarter
+    nova_data = service.generate_from_sheets(quarter=quarter)
+
+    # Write to the Metrics NOVA sheet
+    service.write_to_nova_sheet(nova_data=nova_data)
+
+    click.echo(f"✓ NOVA {quarter} généré et écrit")
 
 
 @main.command()

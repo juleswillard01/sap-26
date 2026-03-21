@@ -445,11 +445,11 @@ class TestSessionManagement:
         """Connect établit session, puis scrape() peut être appelé."""
         adapter = AISAdapter(settings)
 
-        with pytest.raises((NotImplementedError, RetryError)):
-            adapter.connect()
+        adapter.connect()
 
-        # After connect, browser and page should be initialized (or None if connect failed)
-        # Just verify the flow is possible
+        # After connect, browser and page should be initialized
+        assert adapter._browser is not None
+        assert adapter._page is not None
 
     def test_close_releases_browser(
         self, settings: Settings, mock_ais_pw: MagicMock, mock_ais_browser: MagicMock
