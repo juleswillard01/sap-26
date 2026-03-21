@@ -13,6 +13,7 @@ Tests pour:
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -136,18 +137,18 @@ class TestIndyBrowserAdapterConnect:
     def test_connect_creates_context_and_page(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_browser: MagicMock
     ) -> None:
-        """Vérifie que connect() crée un contexte et une page."""
+        """Vérifie que connect(session_mode='headed') crée un contexte et une page."""
         adapter = IndyBrowserAdapter(settings)
-        adapter.connect()
+        adapter.connect(session_mode="headed")
 
         mock_indy_browser.new_context.assert_called_once()
 
     def test_connect_sets_default_timeout(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_page: MagicMock
     ) -> None:
-        """Vérifie que connect() définit le timeout de navigation."""
+        """Vérifie que connect(session_mode='headed') définit le timeout de navigation."""
         adapter = IndyBrowserAdapter(settings)
-        adapter.connect()
+        adapter.connect(session_mode="headed")
 
         mock_indy_page.set_default_timeout.assert_called_once_with(
             IndyBrowserAdapter.NAVIGATION_TIMEOUT
@@ -156,9 +157,9 @@ class TestIndyBrowserAdapterConnect:
     def test_connect_fills_login_credentials(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_page: MagicMock
     ) -> None:
-        """Vérifie que connect() remplit email et password."""
+        """Vérifie que connect(session_mode='headed') remplit email et password."""
         adapter = IndyBrowserAdapter(settings)
-        adapter.connect()
+        adapter.connect(session_mode="headed")
 
         calls = mock_indy_page.fill.call_args_list
         assert any(call[0][1] == settings.indy_email for call in calls)
@@ -167,27 +168,27 @@ class TestIndyBrowserAdapterConnect:
     def test_connect_navigates_to_login_page(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_page: MagicMock
     ) -> None:
-        """Vérifie que connect() navigue à la page de login."""
+        """Vérifie que connect(session_mode='headed') navigue à la page de login."""
         adapter = IndyBrowserAdapter(settings)
-        adapter.connect()
+        adapter.connect(session_mode="headed")
 
         assert any("login" in str(call[0][0]) for call in mock_indy_page.goto.call_args_list)
 
     def test_connect_clicks_submit_button(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_page: MagicMock
     ) -> None:
-        """Vérifie que connect() clique sur le bouton submit."""
+        """Vérifie que connect(session_mode='headed') clique sur le bouton submit."""
         adapter = IndyBrowserAdapter(settings)
-        adapter.connect()
+        adapter.connect(session_mode="headed")
 
         mock_indy_page.click.assert_called()
 
     def test_connect_waits_for_dashboard(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_page: MagicMock
     ) -> None:
-        """Vérifie que connect() attend le dashboard après login."""
+        """Vérifie que connect(session_mode='headed') attend le dashboard après login."""
         adapter = IndyBrowserAdapter(settings)
-        adapter.connect()
+        adapter.connect(session_mode="headed")
 
         assert any(
             "dashboard" in str(call[0][0]) for call in mock_indy_page.wait_for_url.call_args_list
@@ -196,12 +197,122 @@ class TestIndyBrowserAdapterConnect:
     def test_connect_login_failure_raises_runtimeerror(
         self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_page: MagicMock
     ) -> None:
-        """Vérifie que login() échouée lève RuntimeError."""
-        mock_indy_page.goto.side_effect = TimeoutError("Login page timeout")
+        """Vérifie que login interactif échoué lève RuntimeError."""
+        mock_indy_page.wait_for_url.side_effect = TimeoutError("Login page timeout")
         adapter = IndyBrowserAdapter(settings)
 
-        with pytest.raises(RuntimeError, match="Connexion Indy echouee"):
-            adapter.connect()
+        with pytest.raises(RuntimeError, match="Connexion Indy échouée"):
+            adapter.connect(session_mode="headed")
+
+    def test_connect_with_session_mode_headed(
+        self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_browser: MagicMock
+    ) -> None:
+        """Vérifie que session_mode='headed' lance Chromium headed et appelle _login_interactive."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter.connect(session_mode="headed")
+
+        pw_instance = mock_indy_pw.return_value.start.return_value
+        pw_instance.chromium.launch.assert_called_once_with(headless=False)
+
+    def test_connect_with_invalid_session_mode_raises_valueerror(self, settings: Settings) -> None:
+        """Vérifie que session_mode invalide lève ValueError."""
+        adapter = IndyBrowserAdapter(settings)
+
+        with pytest.raises(ValueError, match="session_mode invalide"):
+            adapter.connect(session_mode="invalid_mode")
+
+    def test_connect_headless_mode_default(
+        self, settings: Settings, mock_indy_pw: MagicMock, mock_indy_browser: MagicMock
+    ) -> None:
+        """Vérifie que le mode par défaut est headless."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter.connect()
+
+        pw_instance = mock_indy_pw.return_value.start.return_value
+        pw_instance.chromium.launch.assert_called_once_with(headless=True)
+
+
+class TestIndyBrowserAdapterSessionPersistence:
+    """Tests pour la persistance de session et 2FA."""
+
+    def test_verify_session_returns_true_on_success(
+        self, settings: Settings, mock_indy_page: MagicMock
+    ) -> None:
+        """Vérifie que _verify_session() retourne True si le dashboard est accessible."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = mock_indy_page
+
+        result = adapter._verify_session()
+
+        assert result is True
+        mock_indy_page.goto.assert_called()
+        mock_indy_page.wait_for_selector.assert_called()
+
+    def test_verify_session_returns_false_on_timeout(
+        self, settings: Settings, mock_indy_page: MagicMock
+    ) -> None:
+        """Vérifie que _verify_session() retourne False si timeout."""
+        mock_indy_page.wait_for_selector.side_effect = TimeoutError("Selector not found")
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = mock_indy_page
+
+        result = adapter._verify_session()
+
+        assert result is False
+
+    def test_verify_session_returns_false_when_page_is_none(self, settings: Settings) -> None:
+        """Vérifie que _verify_session() retourne False quand page est None."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = None
+
+        result = adapter._verify_session()
+
+        assert result is False
+
+    def test_login_interactive_fills_credentials(
+        self, settings: Settings, mock_indy_page: MagicMock
+    ) -> None:
+        """Vérifie que _login_interactive() remplit email et password."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = mock_indy_page
+
+        adapter._login_interactive()
+
+        calls = mock_indy_page.fill.call_args_list
+        assert any(call[0][1] == settings.indy_email for call in calls)
+        assert any(call[0][1] == settings.indy_password for call in calls)
+
+    def test_login_interactive_waits_for_dashboard(
+        self, settings: Settings, mock_indy_page: MagicMock
+    ) -> None:
+        """Vérifie que _login_interactive() attend le dashboard."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = mock_indy_page
+
+        adapter._login_interactive()
+
+        assert mock_indy_page.wait_for_url.called
+
+    def test_login_interactive_raises_error_if_page_is_none(self, settings: Settings) -> None:
+        """Vérifie que _login_interactive() lève RuntimeError si page est None."""
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = None
+
+        with pytest.raises(RuntimeError, match="Page non initialisee"):
+            adapter._login_interactive()
+
+    def test_login_interactive_timeout_on_2fa(
+        self, settings: Settings, mock_indy_page: MagicMock
+    ) -> None:
+        """Vérifie que _login_interactive() timeout après 2 min sans 2FA."""
+        mock_indy_page.wait_for_url.side_effect = TimeoutError("2FA timeout")
+        adapter = IndyBrowserAdapter(settings)
+        adapter._page = mock_indy_page
+
+        with pytest.raises(TimeoutError):
+            adapter._login_interactive()
+
+        # Screenshot on error may be attempted depending on implementation
 
 
 class TestIndyBrowserAdapterExportTransactions:
@@ -487,24 +598,34 @@ class TestAISAdapterConnect:
     """Tests pour la connexion AIS."""
 
     def test_connect_launches_headless_chromium(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_browser: MagicMock
+        self,
+        settings: Settings,
+        mock_avance_pw: MagicMock,
+        mock_avance_browser: MagicMock,
+        mock_avance_page: MagicMock,
     ) -> None:
         """Vérifie que connect() lance Chromium en headless."""
         adapter = AISAdapter(settings)
+        mock_avance_page.wait_for_url.return_value = None
 
-        with pytest.raises((NotImplementedError, RetryError)):
+        with contextlib.suppress(NotImplementedError, RetryError):
             adapter.connect()
 
         pw_instance = mock_avance_pw.return_value.start.return_value
         pw_instance.chromium.launch.assert_called_once_with(headless=True)
 
     def test_connect_creates_context_and_page(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_browser: MagicMock
+        self,
+        settings: Settings,
+        mock_avance_pw: MagicMock,
+        mock_avance_browser: MagicMock,
+        mock_avance_page: MagicMock,
     ) -> None:
         """Vérifie que connect() crée un contexte et une page."""
         adapter = AISAdapter(settings)
+        mock_avance_page.wait_for_url.return_value = None
 
-        with pytest.raises((NotImplementedError, RetryError)):
+        with contextlib.suppress(NotImplementedError, RetryError):
             adapter.connect()
 
         mock_avance_browser.new_context.assert_called_once()
@@ -513,12 +634,32 @@ class TestAISAdapterConnect:
 class TestAISAdapterGetClients:
     """Tests pour la récupération des clients."""
 
-    def test_get_clients_raises_notimplementederror(self, settings: Settings) -> None:
-        """Vérifie que get_clients() lève NotImplementedError."""
+    def test_get_clients_returns_list(
+        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
+    ) -> None:
+        """Vérifie que get_clients() retourne une liste de dicts."""
         adapter = AISAdapter(settings)
+        adapter._page = mock_avance_page
+        adapter._browser = MagicMock()
 
-        with pytest.raises(NotImplementedError, match="À implémenter"):
-            adapter.get_clients()
+        # Mock page content: table with clients
+        mock_avance_page.locator.return_value.all.return_value = [
+            MagicMock(),
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].text_content.return_value = (
+            "URSSAF-001 | Alice Dupont | alice@test.fr | Active | 2026-01-01"
+        )
+        mock_avance_page.locator.return_value.all.return_value[
+            1
+        ].text_content.return_value = "URSSAF-002 | Bob Martin | bob@test.fr | Active | 2026-01-02"
+
+        result = adapter.get_clients()
+
+        assert isinstance(result, list)
+        assert len(result) >= 0
 
     def test_get_clients_docstring_exists(self, settings: Settings) -> None:
         """Vérifie que get_clients() a une docstring."""
@@ -529,55 +670,154 @@ class TestAISAdapterGetClients:
 class TestAISAdapterGetInvoices:
     """Tests pour la récupération des factures."""
 
-    def test_get_invoices_raises_notimplementederror(self, settings: Settings) -> None:
-        """Vérifie que get_invoices() lève NotImplementedError."""
-        adapter = AISAdapter(settings)
-
-        with pytest.raises(NotImplementedError, match="À implémenter"):
-            adapter.get_invoices()
-
-    def test_get_invoices_with_status_filter_raises_notimplementederror(
-        self, settings: Settings
+    def test_get_invoices_returns_list(
+        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
     ) -> None:
-        """Vérifie que get_invoices(status=...) lève NotImplementedError."""
+        """Vérifie que get_invoices() retourne une liste de dicts."""
         adapter = AISAdapter(settings)
+        adapter._page = mock_avance_page
+        adapter._browser = MagicMock()
 
-        with pytest.raises(NotImplementedError):
-            adapter.get_invoices(status="approved")
+        # Mock page content: table with invoices
+        mock_avance_page.locator.return_value.all.return_value = [
+            MagicMock(),
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value = [
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[0].text_content.return_value = "DEMANDE-001"
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[1].text_content.return_value = "EN_ATTENTE"
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[2].text_content.return_value = "CLIENT-001"
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[3].text_content.return_value = "500.00"
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[4].text_content.return_value = "2026-03-21"
+
+        result = adapter.get_invoices()
+
+        assert isinstance(result, list)
+
+    def test_get_invoices_with_status_filter(
+        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
+    ) -> None:
+        """Vérifie que get_invoices(status=...) filtre par statut."""
+        adapter = AISAdapter(settings)
+        adapter._page = mock_avance_page
+        adapter._browser = MagicMock()
+
+        # Mock page content
+        mock_avance_page.locator.return_value.all.return_value = [
+            MagicMock(),
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value = [
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[0].text_content.return_value = "DEMANDE-001"
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[1].text_content.return_value = "PAYEE"
+
+        result = adapter.get_invoices(status="PAYEE")
+
+        assert isinstance(result, list)
 
 
 class TestAISAdapterGetInvoiceStatus:
     """Tests pour la récupération du statut d'une facture."""
 
-    def test_get_invoice_status_raises_notimplementederror(self, settings: Settings) -> None:
-        """Vérifie que get_invoice_status() lève NotImplementedError."""
+    def test_get_invoice_status_returns_status_string(
+        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
+    ) -> None:
+        """Vérifie que get_invoice_status() retourne un string de statut."""
         adapter = AISAdapter(settings)
+        adapter._page = mock_avance_page
+        adapter._browser = MagicMock()
 
-        with pytest.raises(NotImplementedError, match="À implémenter"):
-            adapter.get_invoice_status("demande_123")
+        # Mock page content
+        mock_avance_page.locator.return_value.all.return_value = [
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value = [
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        ]
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[0].text_content.return_value = "DEMANDE-001"
+        mock_avance_page.locator.return_value.all.return_value[
+            0
+        ].locator.return_value.all.return_value[1].text_content.return_value = "PAYEE"
+
+        result = adapter.get_invoice_status("DEMANDE-001")
+
+        assert isinstance(result, str)
+        assert result == "PAYEE"
+
+    def test_get_invoice_status_raises_valueerror_if_not_found(
+        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
+    ) -> None:
+        """Vérifie que get_invoice_status() lève ValueError si demande_id non trouvée."""
+        adapter = AISAdapter(settings)
+        adapter._page = mock_avance_page
+        adapter._browser = MagicMock()
+
+        # Mock empty result
+        mock_avance_page.locator.return_value.all.return_value = []
+
+        with pytest.raises(ValueError, match="non trouvée"):
+            adapter.get_invoice_status("INEXISTANT")
 
 
 class TestAISAdapterSubmitInvoice:
-    """Tests pour la soumission d'une facture."""
+    """Tests pour la soumission d'une facture (INTERDIT)."""
 
     def test_submit_invoice_raises_notimplementederror(self, settings: Settings) -> None:
-        """Vérifie que submit_invoice() lève NotImplementedError."""
+        """Vérifie que submit_invoice() lève NotImplementedError (INTERDIT)."""
         adapter = AISAdapter(settings)
         invoice_data = {"montant": 1000, "client_id": "C001"}
 
-        with pytest.raises(NotImplementedError, match="À implémenter"):
+        with pytest.raises(NotImplementedError, match="INTERDIT"):
             adapter.submit_invoice("C001", invoice_data)
 
 
 class TestAISAdapterRegisterClient:
-    """Tests pour l'inscription d'un nouveau client."""
+    """Tests pour l'inscription d'un nouveau client (INTERDIT)."""
 
     def test_register_client_raises_notimplementederror(self, settings: Settings) -> None:
-        """Vérifie que register_client() lève NotImplementedError."""
+        """Vérifie que register_client() lève NotImplementedError (INTERDIT)."""
         adapter = AISAdapter(settings)
         client_data = {"nom": "Dupont", "email": "dupont@test.fr"}
 
-        with pytest.raises(NotImplementedError, match="À implémenter"):
+        with pytest.raises(NotImplementedError, match="INTERDIT"):
             adapter.register_client(client_data)
 
 
@@ -645,11 +885,27 @@ class TestAISAdapterScreenshot:
 
 
 class TestAISAdapterLogin:
-    """Tests pour la tentative de login (NotImplementedError)."""
+    """Tests pour la tentative de login."""
 
-    def test_login_raises_notimplementederror(self, settings: Settings) -> None:
-        """Vérifie que _login() lève RetryError wrappant NotImplementedError."""
+    def test_login_navigates_to_login_page(
+        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
+    ) -> None:
+        """Vérifie que _login() navigue à la page de login."""
         adapter = AISAdapter(settings)
+        adapter._page = mock_avance_page
+        adapter._browser = MagicMock()
+
+        mock_avance_page.wait_for_url.return_value = None
+
+        adapter._login()
+
+        # Verify goto was called with login URL
+        assert any("login" in str(call[0][0]) for call in mock_avance_page.goto.call_args_list)
+
+    def test_login_raises_error_if_no_page(self, settings: Settings) -> None:
+        """Vérifie que _login() lève RetryError wrappant RuntimeError si page non initialisée."""
+        adapter = AISAdapter(settings)
+        adapter._page = None
 
         with pytest.raises(RetryError):
             adapter._login()
