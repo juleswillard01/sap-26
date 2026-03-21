@@ -1,25 +1,24 @@
-"""Tests TDD pour adapters Playwright — IndyBrowserAdapter et AISAdapter.
+"""Tests TDD pour adapters — IndyBrowserAdapter (Playwright) et AISAPIAdapter (REST).
 
-Mock Playwright complètement (sync_playwright, Browser, Page, Context).
+Mock Playwright pour IndyBrowserAdapter (sync_playwright, Browser, Page, Context).
+Mock httpx pour AISAPIAdapter (client POST/GET).
+
 Tests pour:
-- Initialisation avec credentials
-- Connection et login (mock)
+- IndyBrowserAdapter: Initialisation, connection, login, export transactions
+- AISAPIAdapter: Initialisation, token acquisition, collection reads
 - Retry avec tenacity
-- Screenshots d'erreur
-- Export transactions (Indy)
-- Clients, factures, statuts (AIS)
-- Fermeture propre du navigateur
+- Context managers
+- Fermeture propre des ressources
 """
 
 from __future__ import annotations
 
-import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
 from tenacity import RetryError
 
-from src.adapters.ais_adapter import AISAdapter
+from src.adapters.ais_adapter import AISAPIAdapter
 from src.adapters.indy_adapter import IndyBrowserAdapter
 from src.config import Settings
 
@@ -62,29 +61,9 @@ def mock_indy_pw(mock_indy_browser: MagicMock) -> MagicMock:
 
 
 @pytest.fixture
-def mock_avance_page() -> MagicMock:
-    """Mock pour page AIS."""
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_avance_browser(mock_avance_page: MagicMock) -> MagicMock:
-    """Mock pour browser AIS."""
-    browser = MagicMock()
-    context = MagicMock()
-    browser.new_context.return_value = context
-    context.new_page.return_value = mock_avance_page
-    return browser
-
-
-@pytest.fixture
-def mock_avance_pw(mock_avance_browser: MagicMock) -> MagicMock:
-    """Mock pour sync_playwright AIS."""
-    with patch("src.adapters.ais_adapter.sync_playwright") as mock:
-        pw_instance = MagicMock()
-        mock.return_value.start.return_value = pw_instance
-        pw_instance.chromium.launch.return_value = mock_avance_browser
-        yield mock
+def mock_httpx_client() -> MagicMock:
+    """Mock pour client httpx AIS (REST API)."""
+    return MagicMock(spec=httpx.Client)
 
 
 # ============================================================================
@@ -578,334 +557,237 @@ class TestIndyBrowserAdapterScreenshot:
 
 
 # ============================================================================
-# Tests AISAdapter
+# Tests AISAPIAdapter (REST API)
 # ============================================================================
 
 
-class TestAISAdapterInit:
-    """Tests pour l'initialisation de AISAdapter."""
+class TestAISAPIAdapterInit:
+    """Tests pour l'initialisation de AISAPIAdapter."""
 
     def test_init_stores_settings(self, settings: Settings) -> None:
-        """Vérifie que __init__ stocke les settings."""
-        adapter = AISAdapter(settings)
+        """Vérifie que __init__ stocke les settings et crée un client httpx."""
+        adapter = AISAPIAdapter(settings)
 
         assert adapter._settings == settings
-        assert adapter._browser is None
-        assert adapter._page is None
+        assert adapter._token is None
+        assert adapter._client is not None
+
+    def test_init_sets_timeout(self, settings: Settings) -> None:
+        """Vérifie que __init__ configure le timeout httpx."""
+        adapter = AISAPIAdapter(settings)
+        expected_timeout = float(settings.ais_timeout_sec)
+        timeout_dict = adapter._client.timeout.as_dict()
+        assert timeout_dict["read"] == expected_timeout
 
 
-class TestAISAdapterConnect:
-    """Tests pour la connexion AIS."""
+class TestAISAPIAdapterConnect:
+    """Tests pour la connexion AIS REST API."""
 
-    def test_connect_launches_headless_chromium(
-        self,
-        settings: Settings,
-        mock_avance_pw: MagicMock,
-        mock_avance_browser: MagicMock,
-        mock_avance_page: MagicMock,
-    ) -> None:
-        """Vérifie que connect() lance Chromium en headless."""
-        adapter = AISAdapter(settings)
-        mock_avance_page.wait_for_url.return_value = None
+    def test_connect_calls_get_token_with_retry(self, settings: Settings) -> None:
+        """Vérifie que connect() appelle _get_token_with_retry()."""
+        adapter = AISAPIAdapter(settings)
 
-        with contextlib.suppress(NotImplementedError, RetryError):
+        with patch.object(adapter, "_get_token_with_retry", return_value="token123"):
             adapter.connect()
 
-        pw_instance = mock_avance_pw.return_value.start.return_value
-        pw_instance.chromium.launch.assert_called_once_with(headless=True)
+            assert adapter._token == "token123"
 
-    def test_connect_creates_context_and_page(
-        self,
-        settings: Settings,
-        mock_avance_pw: MagicMock,
-        mock_avance_browser: MagicMock,
-        mock_avance_page: MagicMock,
-    ) -> None:
-        """Vérifie que connect() crée un contexte et une page."""
-        adapter = AISAdapter(settings)
-        mock_avance_page.wait_for_url.return_value = None
+    def test_connect_logs_success(self, settings: Settings) -> None:
+        """Vérifie que connect() log le succès."""
+        adapter = AISAPIAdapter(settings)
 
-        with contextlib.suppress(NotImplementedError, RetryError):
-            adapter.connect()
+        with patch.object(adapter, "_get_token_with_retry", return_value="token123"):
+            with patch("src.adapters.ais_adapter.logger") as mock_logger:
+                adapter.connect()
 
-        mock_avance_browser.new_context.assert_called_once()
+                mock_logger.info.assert_called_with("AIS login successful")
 
 
-class TestAISAdapterGetClients:
-    """Tests pour la récupération des clients."""
+class TestAISAPIAdapterGetClients:
+    """Tests pour la récupération des clients (REST)."""
 
-    def test_get_clients_returns_list(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
-    ) -> None:
-        """Vérifie que get_clients() retourne une liste de dicts."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-        adapter._browser = MagicMock()
+    def test_get_clients_returns_list(self, settings: Settings) -> None:
+        """Vérifie que get_clients() retourne une liste de dicts mappés."""
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
 
-        # Mock page content: table with clients
-        mock_avance_page.locator.return_value.all.return_value = [
-            MagicMock(),
-            MagicMock(),
+        mock_response_data = [
+            {
+                "_id": "C001",
+                "firstName": "Alice",
+                "lastName": "Dupont",
+                "email": "alice@test.fr",
+                "status": "INSCRIT",
+            },
+            {
+                "_id": "C002",
+                "firstName": "Bob",
+                "lastName": "Martin",
+                "email": "bob@test.fr",
+                "status": "EN_ATTENTE",
+            },
         ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].text_content.return_value = (
-            "URSSAF-001 | Alice Dupont | alice@test.fr | Active | 2026-01-01"
-        )
-        mock_avance_page.locator.return_value.all.return_value[
-            1
-        ].text_content.return_value = "URSSAF-002 | Bob Martin | bob@test.fr | Active | 2026-01-02"
 
-        result = adapter.get_clients()
+        with patch.object(adapter, "_read_collection", return_value=mock_response_data):
+            result = adapter.get_clients()
 
-        assert isinstance(result, list)
-        assert len(result) >= 0
+            assert isinstance(result, list)
+            assert len(result) == 2
+            assert result[0]["client_id"] == "C001"
+            assert result[0]["nom"] == "Dupont"
+            assert result[1]["email"] == "bob@test.fr"
 
-    def test_get_clients_docstring_exists(self, settings: Settings) -> None:
-        """Vérifie que get_clients() a une docstring."""
-        adapter = AISAdapter(settings)
-        assert adapter.get_clients.__doc__ is not None
+    def test_get_clients_deduplicates_by_id(self, settings: Settings) -> None:
+        """Vérifie que get_clients() déduplique par client_id."""
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
+
+        mock_response_data = [
+            {"_id": "C001", "firstName": "Alice", "lastName": "Dupont", "email": "a@test.fr"},
+            {"_id": "C001", "firstName": "Alice", "lastName": "Dupont", "email": "a@test.fr"},
+        ]
+
+        with patch.object(adapter, "_read_collection", return_value=mock_response_data):
+            result = adapter.get_clients()
+
+            assert len(result) == 1
 
 
-class TestAISAdapterGetInvoices:
-    """Tests pour la récupération des factures."""
+class TestAISAPIAdapterGetInvoices:
+    """Tests pour la récupération des factures (REST)."""
 
-    def test_get_invoices_returns_list(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
-    ) -> None:
+    def test_get_invoices_returns_list(self, settings: Settings) -> None:
         """Vérifie que get_invoices() retourne une liste de dicts."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-        adapter._browser = MagicMock()
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
 
-        # Mock page content: table with invoices
-        mock_avance_page.locator.return_value.all.return_value = [
-            MagicMock(),
-            MagicMock(),
+        mock_response_data = [
+            {
+                "demande_id": "DEMANDE-001",
+                "statut": "EN_ATTENTE",
+                "client_id": "C001",
+                "montant": 500.00,
+                "date": "2026-03-21T10:00:00Z",
+            },
+            {
+                "demande_id": "DEMANDE-002",
+                "statut": "PAYEE",
+                "client_id": "C002",
+                "montant": 1000.00,
+                "date": "2026-03-20T10:00:00Z",
+            },
         ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value = [
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-        ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[0].text_content.return_value = "DEMANDE-001"
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[1].text_content.return_value = "EN_ATTENTE"
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[2].text_content.return_value = "CLIENT-001"
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[3].text_content.return_value = "500.00"
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[4].text_content.return_value = "2026-03-21"
 
-        result = adapter.get_invoices()
+        with patch.object(adapter, "get_invoice_statuses", return_value=mock_response_data):
+            result = adapter.get_invoices()
 
-        assert isinstance(result, list)
+            assert isinstance(result, list)
+            assert len(result) == 2
 
-    def test_get_invoices_with_status_filter(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
-    ) -> None:
+    def test_get_invoices_with_status_filter(self, settings: Settings) -> None:
         """Vérifie que get_invoices(status=...) filtre par statut."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-        adapter._browser = MagicMock()
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
 
-        # Mock page content
-        mock_avance_page.locator.return_value.all.return_value = [
-            MagicMock(),
-            MagicMock(),
+        mock_response_data = [
+            {"demande_id": "DEMANDE-001", "statut": "EN_ATTENTE", "montant": 500.00},
+            {"demande_id": "DEMANDE-002", "statut": "PAYEE", "montant": 1000.00},
         ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value = [
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-        ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[0].text_content.return_value = "DEMANDE-001"
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[1].text_content.return_value = "PAYEE"
 
-        result = adapter.get_invoices(status="PAYEE")
+        with patch.object(adapter, "get_invoice_statuses", return_value=mock_response_data):
+            result = adapter.get_invoices(status="PAYEE")
 
-        assert isinstance(result, list)
+            assert isinstance(result, list)
+            assert len(result) == 1
+            assert result[0]["statut"] == "PAYEE"
 
 
-class TestAISAdapterGetInvoiceStatus:
-    """Tests pour la récupération du statut d'une facture."""
+class TestAISAPIAdapterGetInvoiceStatus:
+    """Tests pour la récupération du statut d'une facture (REST)."""
 
-    def test_get_invoice_status_returns_status_string(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
-    ) -> None:
+    def test_get_invoice_status_returns_status_string(self, settings: Settings) -> None:
         """Vérifie que get_invoice_status() retourne un string de statut."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-        adapter._browser = MagicMock()
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
 
-        # Mock page content
-        mock_avance_page.locator.return_value.all.return_value = [
-            MagicMock(),
+        mock_invoices = [
+            {"demande_id": "DEMANDE-001", "statut": "PAYEE", "montant": 500.00},
+            {"demande_id": "DEMANDE-002", "statut": "EN_ATTENTE", "montant": 1000.00},
         ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value = [
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-        ]
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[0].text_content.return_value = "DEMANDE-001"
-        mock_avance_page.locator.return_value.all.return_value[
-            0
-        ].locator.return_value.all.return_value[1].text_content.return_value = "PAYEE"
 
-        result = adapter.get_invoice_status("DEMANDE-001")
+        with patch.object(adapter, "get_invoice_statuses", return_value=mock_invoices):
+            result = adapter.get_invoice_status("DEMANDE-001")
 
-        assert isinstance(result, str)
-        assert result == "PAYEE"
+            assert isinstance(result, str)
+            assert result == "PAYEE"
 
-    def test_get_invoice_status_raises_valueerror_if_not_found(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
-    ) -> None:
+    def test_get_invoice_status_raises_valueerror_if_not_found(self, settings: Settings) -> None:
         """Vérifie que get_invoice_status() lève ValueError si demande_id non trouvée."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-        adapter._browser = MagicMock()
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
 
-        # Mock empty result
-        mock_avance_page.locator.return_value.all.return_value = []
+        mock_invoices = [
+            {"demande_id": "DEMANDE-001", "statut": "PAYEE", "montant": 500.00},
+        ]
 
-        with pytest.raises(ValueError, match="non trouvée"):
-            adapter.get_invoice_status("INEXISTANT")
+        with patch.object(adapter, "get_invoice_statuses", return_value=mock_invoices):
+            with pytest.raises(ValueError, match="non trouvée"):
+                adapter.get_invoice_status("INEXISTANT")
 
 
-class TestAISAdapterSubmitInvoice:
+class TestAISAPIAdapterSubmitInvoice:
     """Tests pour la soumission d'une facture (INTERDIT)."""
 
     def test_submit_invoice_raises_notimplementederror(self, settings: Settings) -> None:
         """Vérifie que submit_invoice() lève NotImplementedError (INTERDIT)."""
-        adapter = AISAdapter(settings)
+        adapter = AISAPIAdapter(settings)
         invoice_data = {"montant": 1000, "client_id": "C001"}
 
         with pytest.raises(NotImplementedError, match="INTERDIT"):
             adapter.submit_invoice("C001", invoice_data)
 
 
-class TestAISAdapterRegisterClient:
+class TestAISAPIAdapterRegisterClient:
     """Tests pour l'inscription d'un nouveau client (INTERDIT)."""
 
     def test_register_client_raises_notimplementederror(self, settings: Settings) -> None:
         """Vérifie que register_client() lève NotImplementedError (INTERDIT)."""
-        adapter = AISAdapter(settings)
+        adapter = AISAPIAdapter(settings)
         client_data = {"nom": "Dupont", "email": "dupont@test.fr"}
 
         with pytest.raises(NotImplementedError, match="INTERDIT"):
             adapter.register_client(client_data)
 
 
-class TestAISAdapterClose:
-    """Tests pour la fermeture du navigateur."""
+class TestAISAPIAdapterClose:
+    """Tests pour la fermeture de la connexion httpx."""
 
-    def test_close_closes_browser(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_browser: MagicMock
-    ) -> None:
-        """Vérifie que close() ferme le navigateur."""
-        adapter = AISAdapter(settings)
-        adapter._browser = mock_avance_browser
-        adapter._page = MagicMock()
+    def test_close_closes_httpx_client(self, settings: Settings) -> None:
+        """Vérifie que close() ferme le client httpx."""
+        adapter = AISAPIAdapter(settings)
+        adapter._client = MagicMock()
+        adapter._token = "token123"
 
         adapter.close()
 
-        mock_avance_browser.close.assert_called_once()
+        adapter._client.close.assert_called_once()
 
-    def test_close_nullifies_browser_and_page(self, settings: Settings) -> None:
-        """Vérifie que close() annule _browser et _page."""
-        adapter = AISAdapter(settings)
-        adapter._browser = MagicMock()
-        adapter._page = MagicMock()
+    def test_close_nullifies_token(self, settings: Settings) -> None:
+        """Vérifie que close() annule le token."""
+        adapter = AISAPIAdapter(settings)
+        adapter._token = "token123"
+        adapter._client = MagicMock()
 
         adapter.close()
 
-        assert adapter._browser is None
-        assert adapter._page is None
+        assert adapter._token is None
 
-    def test_close_idempotent_when_no_browser(self, settings: Settings) -> None:
+    def test_close_idempotent_when_no_client(self, settings: Settings) -> None:
         """Vérifie que close() est idempotent."""
-        adapter = AISAdapter(settings)
-        adapter._browser = None
-        adapter._page = None
+        adapter = AISAPIAdapter(settings)
+        adapter._client = None
+        adapter._token = None
 
         adapter.close()
 
-        assert adapter._browser is None
-
-
-class TestAISAdapterScreenshot:
-    """Tests pour les screenshots d'erreur."""
-
-    def test_screenshot_on_error_saves_file(
-        self, settings: Settings, mock_avance_page: MagicMock
-    ) -> None:
-        """Vérifie que _screenshot_on_error() sauvegarde un fichier."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-
-        with patch("pathlib.Path.mkdir"):
-            adapter._screenshot_on_error("test_error")
-
-            mock_avance_page.screenshot.assert_called_once()
-            call_kwargs = mock_avance_page.screenshot.call_args[1]
-            assert "path" in call_kwargs
-            assert "error_ais_test_error.png" in call_kwargs["path"]
-
-    def test_screenshot_on_error_no_page_does_nothing(self, settings: Settings) -> None:
-        """Vérifie que _screenshot_on_error() ne lève pas sans page."""
-        adapter = AISAdapter(settings)
-        adapter._page = None
-
-        adapter._screenshot_on_error("test")
-
-
-class TestAISAdapterLogin:
-    """Tests pour la tentative de login."""
-
-    def test_login_navigates_to_login_page(
-        self, settings: Settings, mock_avance_pw: MagicMock, mock_avance_page: MagicMock
-    ) -> None:
-        """Vérifie que _login() navigue à la page de login."""
-        adapter = AISAdapter(settings)
-        adapter._page = mock_avance_page
-        adapter._browser = MagicMock()
-
-        mock_avance_page.wait_for_url.return_value = None
-
-        adapter._login()
-
-        # Verify goto was called with login URL
-        assert any("login" in str(call[0][0]) for call in mock_avance_page.goto.call_args_list)
-
-    def test_login_raises_error_if_no_page(self, settings: Settings) -> None:
-        """Vérifie que _login() lève RetryError wrappant RuntimeError si page non initialisée."""
-        adapter = AISAdapter(settings)
-        adapter._page = None
-
-        with pytest.raises(RetryError):
-            adapter._login()
+        assert adapter._token is None

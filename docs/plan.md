@@ -745,3 +745,33 @@ sap-facture/
 **Statut** : PLANNING
 **Auteur** : Claude Code
 **Prochaine Review** : Fin Sprint 2 (estimé 2026-03-28)
+
+---
+
+## Sprint AIS REST API Rewrite (Jour X)
+
+### Découverte
+L'exploration MCP Playwright a révélé que AIS (app.avance-immediate.fr) expose une API REST interne :
+- Base URL : `https://3u7151jll8.execute-api.eu-west-3.amazonaws.com`
+- Backend : AWS API Gateway + Lambda (eu-west-3 Paris) + MongoDB
+- Auth : JSON dans header `Authorization`
+- Pas de Playwright nécessaire — appels REST directs via httpx
+
+### Endpoints
+- `POST /professional` — Login (email+password → token) + Read profile
+- `POST /mongo` — CRUD MongoDB (collection dans header Authorization)
+- `POST /pennylane` — Intégration comptable
+
+### Collections MongoDB
+- `customer` — Clients inscrits URSSAF
+- `bill` — Factures avance immédiate
+- `billNonAi` — Factures hors avance immédiate
+- `fiscalCertificate` — Attestations fiscales
+- `message`, `notifications` — Messages système
+
+### Tâches
+- [ ] Réécrire `src/adapters/ais_adapter.py` (Playwright → httpx)
+- [ ] Créer `tests/test_ais_api.py` (22 tests REST, respx mocks)
+- [ ] MAJ config.py (ajouter ais_api_base_url)
+- [ ] Review sécurité + code
+- [ ] Coverage ≥ 80%

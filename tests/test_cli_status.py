@@ -63,7 +63,7 @@ class TestStatusShowsInvoiceCounts:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -112,7 +112,7 @@ class TestStatusShowsInvoiceCounts:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -165,7 +165,7 @@ class TestStatusShowsOverdueAlert:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -214,7 +214,7 @@ class TestStatusShowsOverdueAlert:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -265,7 +265,7 @@ class TestStatusShowsBalance:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -316,7 +316,7 @@ class TestStatusShowsLastSync:
         mock_sheets.get_cache_stats.return_value = {"hits": 5, "misses": 2}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -365,7 +365,7 @@ class TestStatusExitCode:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["status"])
 
         # Assert
@@ -413,7 +413,7 @@ class TestStatusVerboseMode:
         mock_sheets.get_cache_stats.return_value = {"hits": 10, "misses": 3}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["--verbose", "status"])
 
         # Assert
@@ -463,7 +463,7 @@ class TestStatusDryRunMode:
         mock_sheets.get_cache_stats.return_value = {"hits": 0, "misses": 0}
 
         # Act
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets):
+        with patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets):
             result = runner.invoke(main, ["--dry-run", "status"])
 
         # Assert

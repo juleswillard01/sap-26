@@ -49,7 +49,9 @@ class Settings(BaseSettings):
     # AIS (Avance Immédiate Services)
     ais_email: str = ""
     ais_password: str = ""
-    ais_base_url: str = "https://app.avance-immediate.fr"
+    ais_api_base_url: str = "https://3u7151jll8.execute-api.eu-west-3.amazonaws.com"
+    ais_timeout_sec: int = 30
+    ais_max_retries: int = 3
 
     # App
     app_env: str = "development"

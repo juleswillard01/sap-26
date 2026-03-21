@@ -168,6 +168,28 @@ Choix : Click
 
 ---
 
+## AIS Adapter — Choix REST API vs Playwright
+
+### Alternatives évaluées
+
+| Option | Avantages | Inconvénients | Verdict |
+|---|---|---|---|
+| Playwright HTML scraping | Fonctionne sans API | Fragile (sélecteurs cassent), lent (~5s/page), lourd (Chromium 200MB) | REJETÉ |
+| API REST directe (httpx) | Rapide (~100ms), fiable, léger, testable | API non documentée (reverse-engineered) | RETENU |
+| API officielle AIS | Stable, documentée | N'existe pas publiquement | NON DISPONIBLE |
+| GraphQL | Flexible | AIS n'utilise pas GraphQL | NON APPLICABLE |
+
+### Décision
+REST API via httpx — découverte par reverse engineering MCP Playwright le 2026-03-21.
+API Gateway AWS (eu-west-3) + Lambda + MongoDB. Auth par JSON dans Authorization header.
+Token stable, pas de 2FA, pas de cookies.
+
+### Risques
+- API peut changer sans préavis (pas de contrat)
+- Mitigation: tests d'intégration périodiques, fallback Playwright si besoin
+
+---
+
 ## Glossaire Technique
 
 | Terme | Définition |

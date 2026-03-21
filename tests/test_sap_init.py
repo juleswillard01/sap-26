@@ -370,7 +370,7 @@ class TestSapInitCliCommand:
 
         runner = CliRunner()
 
-        with patch("src.cli.SheetsAdapter") as mock_adapter_class:
+        with patch("src.adapters.sheets_adapter.SheetsAdapter") as mock_adapter_class:
             mock_adapter = MagicMock()
             mock_adapter_class.return_value = mock_adapter
 

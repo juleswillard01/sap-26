@@ -742,7 +742,10 @@ class TestNovaService:
             }
         ]
 
-        with patch("src.cli.SheetsAdapter", return_value=mock_sheets), patch("src.cli.Settings"):
+        with (
+            patch("src.adapters.sheets_adapter.SheetsAdapter", return_value=mock_sheets),
+            patch("src.cli.Settings"),
+        ):
             # Act
             result = runner.invoke(main, ["nova", "Q1-2026"])
 

@@ -8,7 +8,13 @@ SAP-Facture envoie un email à Jules pour qu'il relance le client.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timezone
+    UTC = timezone.utc
 
 # Import real datetime to avoid issues when tests patch the module
 from datetime import datetime as real_datetime
