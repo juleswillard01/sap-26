@@ -1,15 +1,25 @@
-# Specs Index
+# Specs Index — SAP-Facture
 
-| ID | Module | Statut | Spec |
-|----|--------|--------|------|
-| SPEC-001 | Sheets Adapter | Implemented (95%) | [sheets-adapter](SPEC-001-sheets-adapter.md) |
-| SPEC-002 | AIS Scraping | In Progress (60%) | [ais-scraping](SPEC-002-ais-scraping.md) |
-| SPEC-003 | Indy Export | In Progress (70%) | [indy-export](SPEC-003-indy-export.md) |
-| SPEC-004 | Reconciliation | Complete (100%) | [reconciliation](SPEC-004-reconciliation.md) |
-| SPEC-005 | Notifications | Complete (100%) | [notifications](SPEC-005-notifications.md) |
-| SPEC-006 | NOVA Reporting | Complete (100%) | [nova-reporting](SPEC-006-nova-reporting.md) |
+Chaque spec = 1 branche = 1 issue = 1 PR vers main.
 
-## Légende
-- **Complete** : Module implémenté + tests ≥80% coverage
-- **Implemented** : Module implémenté, tests existants
-- **In Progress** : Implémentation partielle, gaps identifiés
+| ID | Module | Branche | Issue | Statut |
+|----|--------|---------|-------|--------|
+| SPEC-001 | Sheets Adapter | `sheets-adapter` | [#1](https://github.com/juleswillard01/sap-26/issues/1) | 95% |
+| SPEC-002 | AIS Scraping | `ais-scraping` | [#2](https://github.com/juleswillard01/sap-26/issues/2) | 60% |
+| SPEC-003 | Indy Export | `indy-export` | [#3](https://github.com/juleswillard01/sap-26/issues/3) | 70% |
+| SPEC-004 | Reconciliation | `reconciliation-engine` | [#4](https://github.com/juleswillard01/sap-26/issues/4) | 100% |
+| SPEC-005 | Notifications | `notifications-email` | [#5](https://github.com/juleswillard01/sap-26/issues/5) | 100% |
+| SPEC-006 | NOVA Reporting | `nova-reporting` | [#6](https://github.com/juleswillard01/sap-26/issues/6) | 100% |
+
+## Ordre de développement recommandé
+1. **SPEC-001** Sheets Adapter (fondation — tous les autres modules en dépendent)
+2. **SPEC-002** AIS Scraping (données factures)
+3. **SPEC-003** Indy Export (données bancaires)
+4. **SPEC-004** Reconciliation (dépend de 001 + 003)
+5. **SPEC-005** Notifications (dépend de 002 + 004)
+6. **SPEC-006** NOVA Reporting (dépend de 001)
+
+## Workflow
+1. `claude --worktree <branch>` → Golden Workflow (PLAN → TDD → REVIEW → VERIFY → COMMIT)
+2. PR vers main `Closes #N`
+3. Squash merge → Done
