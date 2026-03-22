@@ -129,6 +129,13 @@ uv run python -m src.cli status
 uv run python -m src.cli nova
 ```
 
+## Documentation
+
+- **[Module Map](docs/modules/README.md)** — Cartographie code ↔ tests ↔ specs par module
+- **[Specs Index](docs/specs/README.md)** — Spécifications techniques (SPEC-001 à SPEC-006)
+- **[Guides](docs/guides/)** — Guides de setup et intégration
+- **[CDC](docs/CDC.md)** — Cahier des charges complet
+
 ## Licence
 
 MIT — Jules Willard — SIREN 991552019

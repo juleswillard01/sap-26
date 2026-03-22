@@ -1,159 +1,86 @@
 # Rapprochement Bancaire & Lettrage
 
-Source de vérité : `docs/SCHEMAS.html` diagramme 6
+Source: `docs/SCHEMAS.html` diagramme 6 + `docs/CDC.md` §3
 
 ## Import Transactions (CDC §3.1)
 
-**Source** : Indy Banking via Playwright headless
-- Export CSV → parse → onglet Transactions
+**Source**: Indy Banking via Playwright headless → export CSV
+- Dedup par `indy_id` lors import batch
+- Transactions IMMUTABLES après import (sauf `facture_id`, `statut_lettrage`)
 - Retry 3x avec backoff exponentiel
-- Screenshots erreur dans `io/cache/` (SANS données sensibles — RGPD)
-- Dedup par `indy_id` lors de l'import batch
-- Transactions IMMUTABLES après import (sauf `facture_id` et `statut_lettrage`)
 
-**Fréquence** :
-- Sync quotidien via cron
-- `sap reconcile` manuel possible anytime
-- Volume estimé : ~400 transactions/an (~33/mois)
+**Fréquence**: Quotidien (cron) + `sap reconcile` manuel
 
----
+## Lettrage — Scoring (CDC §3.2)
 
-## Lettrage — Score de Confiance (CDC §3.2)
+Pour chaque facture **PAYEE** dans fenêtre temporelle ±5 jours:
 
-### Algorithme d'appairage
+### Algorithme
 
-Pour chaque facture **PAYEE** (statut = PAYE) dans l'onglet Factures :
-
-1. **Fenêtre temporelle** : Filtrer transactions URSSAF dans `date_paiement ± 5 jours`
-   - Minimise faux positifs (délai traitement bancaire)
-   - Couvre variance calendaire URSSAF → Indy
-
-2. **Critères de scoring** (0-100 pts) :
-   - Montant exact (100% montant facture) = **+50 points**
-   - Date écart < 3 jours = **+30 points**
-   - Libellé contient "URSSAF" = **+20 points**
-
-3. **Résultats** :
-   - Score **≥ 80** → `LETTRE_AUTO` (rapprochement automatique)
-   - Score **< 80** → `A_VERIFIER` (Jules valide manuellement)
-   - Pas de transaction trouvée → `PAS_DE_MATCH` (attendre virement)
-
-### MVP : Lettrage Semi-Automatique
-
-- Le système **propose** des matchs avec score
-- Jules **confirme** manuellement dans l'onglet Lettrage
-- Pas de lettrage 100% automatique sans confirmation utilisateur
-- Surligné en orange (`A_VERIFIER`) et rouge (`PAS_DE_MATCH`) dans le UI
-
----
-
-## Onglet Lettrage (formules Sheets)
-
-**Colonnes** (lecture seule — formules) :
-- `facture_id` : clé étrangère vers Factures
-- `montant_facture` : =Factures.montant_total
-- `txn_id` : indy_id du match trouvé
-- `txn_montant` : montant transaction
-- `ecart` : =ABS(montant_facture - txn_montant)
-- `score_confiance` : 0-100 (calculé par algo scoring)
-- `statut` : LETTRE_AUTO / A_VERIFIER / PAS_DE_MATCH
-
-**Écriture** :
-- Importée depuis import Transactions (via backend)
-- Colonne `facture_id` remplie par matching algo
-- Jules peut éditer manuellement si besoin de correction
-
----
-
-## Onglet Balances (formules Sheets)
-
-**Colonnes** (lecture seule — agrégations mensuelles) :
-- `mois` : YYYY-MM
-- `nb_factures` : COUNT(Factures où date_fin DANS mois)
-- `ca_total` : SUM(Factures.montant_total où date_fin DANS mois)
-- `recu_urssaf` : SUM(Transactions.montant où date_import DANS mois ET facture_id NOT NULL)
-- `solde` : ca_total - recu_urssaf
-- `nb_non_lettrees` : COUNT(Factures où statut ≠ PAYE ET date_fin DANS mois)
-- `nb_en_attente` : COUNT(Factures où statut = EN_ATTENTE ET date_fin DANS mois)
-
-**Refresh** : Automatique via changements onglets Factures / Transactions / Lettrage
-
----
-
-## Règles Opérationnelles
-
-### Architecture : Indy Playwright headless
-- **SEULEMENT** Playwright automatise le compte de Jules sur app.indy.fr
-- Indy n'a pas d'API publique — pas d'intégration API bancaire possible
-- Pas d'accès compte URSSAF direct (données export transactions Indy suffisent)
-- AIS (Account Information Services) : non applicable — Indy ne supporte pas les standard bancaires (ex. PSD2)
-
-### Immuabilité transactions
-- Après import → colonnes `date_valeur`, `montant`, `libelle` **read-only**
-- Colonnes éditables : `facture_id`, `statut_lettrage`
-- Audit : logs d'édition (timestamp + ancien/nouveau valeur)
-
-### Gestion des doublons
-- Dedup lors du parsing CSV (clé `indy_id`)
-- Si même `indy_id` + même `montant` + même `date_valeur` → skip
-
-### Fenêtre de lettrage
-- ±5 jours : empirique, ajustable si délais URSSAF varient
-- Exemple : facture 15/01, lettrer transactions 10-20/01
-
-### Score confiance détails
 ```
-Cas A : Montant 100€, facture 100€, date écart 1j, libellé "VIREMENT URSSAF"
-  → 50 (montant) + 30 (date) + 20 (libellé) = 100 → LETTRE_AUTO
+Score = 0
+Si montant exact (100% match)        → +50 pts
+Si date écart ≤ 3 jours             → +30 pts
+Si libellé contient "URSSAF"        → +20 pts
 
-Cas B : Montant 100€, facture 100€, date écart 1j, libellé "Virement client"
-  → 50 (montant) + 30 (date) + 0 (pas URSSAF) = 80 → LETTRE_AUTO (seuil atteint)
-
-Cas C : Montant 99€, facture 100€, date écart 6j, libellé "URSSAF"
-  → 0 (montant ≠) + 0 (date > 3j) + 20 (libellé) = 20 → A_VERIFIER
-
-Cas D : Aucune transaction dans ±5j
-  → PAS_DE_MATCH
+Seuils:
+  ≥ 80 → LETTRE_AUTO    (facture_id écrite automatiquement)
+  < 80 → A_VERIFIER     (Jules valide manuellement)
+  Ø    → PAS_DE_MATCH   (attendre virement URSSAF)
 ```
 
-### Lettrage manuel (Jules)
-1. Ouvre onglet Lettrage
-2. Voit propositions avec scores
-3. Pour statuts A_VERIFIER : valide ou corrige `facture_id` / `txn_id`
-4. Sauve → backend valide cohérence et update Balances
+### Exemples Scoring
 
----
+```
+Cas A: Montant exact, date +1j, libellé "VIREMENT URSSAF"
+       → 50 + 30 + 20 = 100 → LETTRE_AUTO ✓
 
-## Intégration avec Machine à États Facture
+Cas B: Montant exact, date +1j, libellé générique
+       → 50 + 30 + 0 = 80 → LETTRE_AUTO ✓
 
-**Transition PAYE → RAPPROCHE** :
-- Facture statut = PAYE + LETTRE_AUTO en onglet Lettrage
-- OU Jules confirme lettrage manuel (A_VERIFIER) → statut = RAPPROCHE
+Cas C: Montant -1€, date +6j, libellé "URSSAF"
+       → 0 + 0 + 20 = 20 → A_VERIFIER (Jules juge)
 
-**Factures sans match** :
-- Restent PAYE (pas RAPPROCHE)
-- À suivre manuellement si virement en retard
+Cas D: Aucune transaction ±5j
+       → PAS_DE_MATCH (attendre)
+```
 
----
+## Onglet Lettrage (Formules Sheets)
 
-## RGPD & Sécurité
+| Colonne | Type | Source |
+|---------|------|--------|
+| facture_id | str | FK Factures |
+| montant_facture | float | Factures.montant_total |
+| txn_id | str | Transactions.indy_id |
+| txn_montant | float | Transactions.montant |
+| score_confiance | int | Algo scoring (0-100) |
+| statut | str | LETTRE_AUTO / A_VERIFIER / PAS_DE_MATCH |
 
-### Données sensibles
-- Screenshots Indy : stockés dans `io/cache/` avec **PAS de données bancaires visibles**
-- CSV parsé : aucun numéro de compte, BIC/IBAN strippés
-- Transactions : libellés peuvent être anonymisés en prod
+## Onglet Balances (Agrégations Mensuelles)
 
-### Conformité
-- Logs d'import : qui, quand, combien transactions
-- Logs édition onglet : qui a changé facture_id le DD/MM
-- Pas de transmission URSSAF/Indy vers tiers
-- Rétention : transactions 3 ans minimum (normes fiscales)
+| Colonne | Logique |
+|---------|---------|
+| mois | Première du mois (YYYY-MM-01) |
+| nb_factures | COUNT factures PAYE du mois |
+| ca_total | SUM montant factures du mois |
+| recu_urssaf | SUM montant transactions du mois |
+| solde | ca_total - recu_urssaf |
+| nb_non_lettrees | COUNT factures PAYE non-lettrées |
+| nb_en_attente | COUNT factures EN_ATTENTE |
 
----
+## Machine à États — Integration
 
-## Changements Futurs (Phase 2+)
+**Transition PAYE → RAPPROCHE**:
+- Facture PAYEE + match automatique (score ≥80) → RAPPROCHE
+- OU Jules confirme match manuel (A_VERIFIER) → RAPPROCHE
+- Factures sans match restent PAYE (suivi manuel)
 
-- Ajustement seuil score si taux de A_VERIFIER > 30%
-- Support virements multiples (facture = N transactions)
-- Lettrage 100% auto après N mois de confiance établie
-- Rematch rétrospectif si virement arrive tardivement
+## Dedup Indy
+
+Clé: `indy_id` + `montant` + `date_valeur`
+- Si tuple déjà existant → skip (pas de doublon)
+
+## Gestion Fenêtre Temporelle
+
+- **±5 jours**: empirique, ajustable si délais URSSAF varient
+- Exemple: facture 15/01 → chercher transactions 10-20/01

@@ -1,63 +1,40 @@
 # Machine à États — Cycle de Vie Facture
 
-Source de vérité : `docs/SCHEMAS.html` diagramme 7
+Source: `docs/SCHEMAS.html` diagramme 7
 
 ## 11 États
 
 | État | Description | Terminal |
 |------|-------------|----------|
-| BROUILLON | PDF généré, pas envoyé, modifiable | Non |
-| SOUMIS | Envoyé à URSSAF | Non |
-| CREE | URSSAF accepte le payload | Non |
-| EN_ATTENTE | Email envoyé au client, timer 48h actif | Non |
-| VALIDE | Client a validé sur portail URSSAF | Non |
-| PAYE | URSSAF a effectué le virement | Non |
-| RAPPROCHE | Match avec transaction Indy | Oui |
-| ERREUR | Payload invalide ou API down | Non |
+| BROUILLON | Créée, pas envoyée | Non |
+| SOUMIS | Envoyée à URSSAF | Non |
+| CREE | URSSAF acceptée | Non |
+| EN_ATTENTE | Email client envoyé, timer 48h | Non |
+| VALIDE | Client validée | Non |
+| PAYE | URSSAF virement 100% | Non |
+| RAPPROCHE | Match transaction Indy | Oui |
+| ERREUR | Payload invalide/API down | Non |
 | EXPIRE | Délai 48h dépassé | Non |
 | REJETE | Client refuse | Non |
-| ANNULE | Jules annule manuellement | Oui |
+| ANNULE | Jules annule | Oui |
 
 ## 13 Transitions Valides
 
-| De | Vers | Trigger | Side Effect |
-|----|------|---------|-------------|
-| BROUILLON | SOUMIS | Envoi API URSSAF | Générer PDF, écrire Sheets |
-| BROUILLON | ANNULE | Jules annule | Marquer annulé dans Sheets |
-| SOUMIS | CREE | URSSAF accepte | Stocker urssaf_demande_id |
-| SOUMIS | ERREUR | Payload invalide / API down | Logger erreur |
-| CREE | EN_ATTENTE | Email envoyé au client (immédiat D3) | Démarrer timer 48h |
-| EN_ATTENTE | VALIDE | Client valide sur portail | date_validation = now |
-| EN_ATTENTE | EXPIRE | Délai 48h dépassé | Notifier Jules |
-| EN_ATTENTE | REJETE | Client refuse | Notifier Jules |
-| VALIDE | PAYE | URSSAF vire 100% | date_paiement = now |
-| PAYE | RAPPROCHE | Match transaction Indy | date_rapprochement = now |
-| ERREUR | BROUILLON | Jules corrige | Réinitialiser champs |
-| EXPIRE | BROUILLON | Re-soumettre | Réinitialiser dates |
-| REJETE | BROUILLON | Corriger si besoin | Réinitialiser dates |
-
-## Transitions INTERDITES
-
-Les transitions suivantes sont **explicitement impossibles** :
-- BROUILLON → PAYE (sauter des étapes)
-- BROUILLON → VALIDE (sauter des étapes)
-- SOUMIS → VALIDE (sauter EN_ATTENTE)
-- CREE → PAYE (sauter EN_ATTENTE et VALIDE)
-- CREE → VALIDE (nécessite EN_ATTENTE intermédiaire)
-- ANNULE → * (terminal, aucune transition sortante)
-- RAPPROCHE → * (terminal, aucune transition sortante)
-- PAYE → BROUILLON (irréversible après paiement)
-- VALIDE → BROUILLON (irréversible après validation)
-- VALIDE → EN_ATTENTE (pas de regress)
-- PAYE → EN_ATTENTE (pas de regress)
-- PAYE → VALIDE (pas de regress)
-
-## Timers — CDC §2.3
-
-- **T+36h** sans validation → Email reminder automatique à Jules
-- **T+48h** sans validation → Transition EN_ATTENTE → EXPIRE
-
-Les timers s'activent au moment de la transition CREE → EN_ATTENTE (email envoyé).
+| De | Vers | Trigger |
+|----|------|---------|
+| BROUILLON | SOUMIS | Envoi API URSSAF |
+| BROUILLON | ANNULE | Jules annule |
+| SOUMIS | CREE | URSSAF accepte |
+| SOUMIS | ERREUR | Payload invalide |
+| CREE | EN_ATTENTE | Email client (D3 immédiat) |
+| EN_ATTENTE | VALIDE | Client valide |
+| EN_ATTENTE | EXPIRE | Délai 48h dépassé |
+| EN_ATTENTE | REJETE | Client refuse |
+| VALIDE | PAYE | URSSAF vire |
+| PAYE | RAPPROCHE | Match Indy ≥80pts |
+| ERREUR | BROUILLON | Jules corrige |
+| EXPIRE | BROUILLON | Re-soumettre |
+| REJETE | BROUILLON | Corriger |
 
 ## Code de Référence
 
@@ -92,43 +69,29 @@ VALID_TRANSITIONS = {
 }
 
 def can_transition(current: InvoiceStatus, target: InvoiceStatus) -> bool:
-    """Valide une transition selon la machine à états."""
     return target in VALID_TRANSITIONS.get(current, [])
-
-def transition(current: InvoiceStatus, target: InvoiceStatus) -> InvoiceStatus:
-    """Effectue la transition si elle est valide, sinon lève InvalidStateTransition."""
-    if not can_transition(current, target):
-        raise InvalidStateTransition(f"Cannot transition from {current} to {target}")
-    return target
 ```
 
-## Règles D3 — Immédiaineté
+## Timers (CDC §2.3)
 
-**CREE → EN_ATTENTE est IMMÉDIAT** : Il n'y a pas de délai entre ces deux états. Dès que URSSAF accepte le payload (CREE), l'email est envoyé au client **instantanément** et l'état passe immédiatement à EN_ATTENTE. Les timers T+36h et T+48h se démarrent à cet instant.
+- **T+36h** : Email reminder Jules si pas validation
+- **T+48h** : Transition EN_ATTENTE → EXPIRE (auto)
 
-## Diagramme d'État
+## ASCII Diagram
 
 ```
-[START]
-  ↓
-BROUILLON ─────────────── (Jules crée)
-  ├─→ SOUMIS ─────────── (Envoi API URSSAF)
-  │     ├─→ CREE ─────── (URSSAF accepte)
-  │     │    ↓ (D3 immédiat)
-  │     │   EN_ATTENTE ─ (Email client, timer 48h)
-  │     │    ├─→ VALIDE → PAYE → RAPPROCHE ─→ [TERMINAL]
-  │     │    ├─→ EXPIRE → BROUILLON
-  │     │    └─→ REJETE → BROUILLON
-  │     │
-  │     └─→ ERREUR → BROUILLON
-  │
-  └─→ ANNULE ───────────────────────────→ [TERMINAL]
+BROUILLON ──→ SOUMIS ──→ CREE ──→ EN_ATTENTE ──→ VALIDE ──→ PAYE ──→ RAPPROCHE [TERMINAL]
+   │                        │          ├─→ EXPIRE ──┐
+   │                        │          └─→ REJETE ──┤
+   └───────────────────────→ ERREUR ───────────────┘
+          (Jules)              │
+                          BROUILLON (retry)
+
+BROUILLON ──→ ANNULE [TERMINAL]
 ```
 
-## Transitions de Correction
+## Transitions Interdites
 
-Les trois états d'échec (ERREUR, EXPIRE, REJETE) permettent de revenir à BROUILLON afin que Jules puisse corriger et re-soumettre. C'est le seul chemin de rédemption après un problème.
-
-## Statuts dans Google Sheets
-
-La colonne `statut` de l'onglet **Factures** doit toujours refléter l'état actuel de la machine à états. Les transitions se propagent via l'API SheetsAdapter en batch writes pour éviter les race conditions.
+- BROUILLON → PAYE/VALIDE (sauter étapes)
+- ANNULE/RAPPROCHE → * (terminales)
+- Regressions (PAYE → EN_ATTENTE, etc.)

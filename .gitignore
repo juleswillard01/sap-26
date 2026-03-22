@@ -1,25 +1,35 @@
+# Secrets
 .env
 .env.*
-!.env.example
-
-# Credentials — NEVER commit
+*.pem
+*.key
+*credentials*.json
+*service-account*
 credentials/
-credentials/*.json
-# Gmail OAuth2 credentials (NEVER commit)
-credentials/gmail_oauth.json
-credentials/gmail_token.json
 
-*.json
-!package.json
+# Python
 __pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
-.pyright/
-io/exports/
-io/cache/
 *.egg-info/
 dist/
 build/
 .venv/
-.claude/memory/session-log.txt
+
+# Linting / Type-checking
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.mypy_cache/
+
+# Coverage
+htmlcov/
+.coverage
+
+# Research / Cache
+io/
+
+# Plugins
+.playwright-mcp/
+
+# Assets recherche
+*.tar.gz
+docs/avance-immediate-homepage.png
