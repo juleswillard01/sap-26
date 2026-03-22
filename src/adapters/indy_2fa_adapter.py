@@ -207,7 +207,7 @@ class Indy2FAAdapter:
         Raises:
             RuntimeError: If email or password field not found
         """
-        # Fill email
+        # Fill email — wait up to 30s for field (Turnstile may delay)
         email_selectors = [
             "input[type='email']",
             "input[name='email']",
@@ -216,19 +216,25 @@ class Indy2FAAdapter:
         ]
 
         email_filled = False
-        for selector in email_selectors:
-            try:
-                email_input = await page.query_selector(selector)
-                if email_input:
-                    await email_input.send_keys(email)
-                    email_filled = True
-                    logger.debug("Email filled via selector: %s", selector)
-                    break
-            except Exception:
-                continue
+        for attempt in range(15):
+            for selector in email_selectors:
+                try:
+                    email_input = await page.query_selector(selector)
+                    if email_input:
+                        await email_input.send_keys(email)
+                        email_filled = True
+                        logger.debug(
+                            "Email filled via selector: %s (attempt %d)", selector, attempt
+                        )
+                        break
+                except Exception:
+                    continue
+            if email_filled:
+                break
+            await page.sleep(2)
 
         if not email_filled:
-            logger.error("Email field not found")
+            logger.error("Email field not found after 30s")
             raise RuntimeError("Could not find email input field")
 
         await page.sleep(1)
@@ -271,7 +277,7 @@ class Indy2FAAdapter:
         button_texts = ["Se connecter", "Connect", "Login", "Sign In"]
         for text in button_texts:
             try:
-                button = await page.find(text, timeout=5000)
+                button = await page.find(text, timeout=5)
                 if button:
                     await button.click()
                     logger.debug("Submit button clicked via text: %s", text)
@@ -324,27 +330,30 @@ class Indy2FAAdapter:
                 logger.info("2FA page detected by URL pattern")
                 return True
 
-            # Check for code input field
-            for selector in SELECTORS_CODE_INPUT[:3]:  # Try first 3
+            # Check for code input field (nodriver has no timeout param)
+            for selector in SELECTORS_CODE_INPUT:
                 try:
-                    code_input = await page.query_selector(selector, timeout=2000)
+                    code_input = await page.query_selector(selector)
                     if code_input:
                         logger.info("2FA code input found via selector: %s", selector)
                         return True
                 except Exception:
                     continue
 
-            # Check page heading for verification keywords
+            # Check if URL changed from /connexion (means form submitted)
+            if "/connexion" not in url:
+                logger.info("URL changed from /connexion, likely 2FA: %s", url)
+                return True
+
+            # Check page content for verification keywords
             try:
-                headings = await page.query_selector_all("h1, h2, h3")
-                for heading in headings[:5]:  # Check first 5 headings
-                    try:
-                        text = await heading.get_text()
-                        if any(pattern in text.lower() for pattern in URL_PATTERNS_2FA):
-                            logger.info("2FA page detected by heading: %s", text)
-                            return True
-                    except Exception:
-                        continue
+                page_text = await page.evaluate("document.body.innerText")
+                if page_text and any(
+                    kw in page_text.lower()
+                    for kw in ["code", "vérification", "verification", "confirmer", "2fa"]
+                ):
+                    logger.info("2FA page detected by body text")
+                    return True
             except Exception:
                 pass
 
@@ -378,7 +387,7 @@ class Indy2FAAdapter:
                 gmail_reader.get_latest_2fa_code,
                 timeout_sec,
                 5,  # poll_interval_sec
-                "indy",  # sender_filter
+                "support@indy.fr",  # sender_filter — avoid matching newsletters
             )
             return code
         except Exception as e:
@@ -399,76 +408,51 @@ class Indy2FAAdapter:
         Returns:
             True if code injected and verify clicked, False if any step fails
         """
-        # Find code input field
-        code_input = None
-        for selector in SELECTORS_CODE_INPUT:
-            try:
-                code_input = await page.query_selector(selector, timeout=3000)
-                if code_input:
-                    logger.debug("Code input found via selector: %s", selector)
-                    break
-            except Exception:
-                continue
-
-        if not code_input:
-            logger.error("Could not find code input field")
-            return False
-
-        # Handle different input types (single field vs digit-by-digit)
+        # Inject code digit by digit — Indy uses 6 individual input boxes
         try:
-            input_type = await code_input.get_attribute("type")
-            logger.debug("Code input type: %s", input_type)
+            inputs = await page.query_selector_all("input[type='text']")
+            if len(inputs) >= 6:
+                # 6 individual boxes: click each, type one digit, wait 1s
+                for i, digit in enumerate(code[:6]):
+                    await inputs[i].click()
+                    await page.sleep(0.5)
+                    await inputs[i].send_keys(digit)
+                    logger.debug("Digit %d injected: %s", i, digit)
+                    await page.sleep(1)
+            elif len(inputs) == 1:
+                # Single field
+                await inputs[0].click()
+                await inputs[0].send_keys(code)
+            else:
+                logger.error("Unexpected number of text inputs: %d", len(inputs))
+                return False
 
-            # For single text field: inject full code
-            await code_input.send_keys(code)
-            logger.debug("Code injected into field")
-
+            logger.debug("Code injected digit by digit")
             await page.sleep(1)
 
         except Exception as e:
             logger.error("Failed to inject code: %s", e, exc_info=True)
             return False
 
-        # Find and click verify button
-        verify_btn = None
-
-        # Try by text
-        for text in BUTTON_TEXTS_VERIFY:
-            try:
-                verify_btn = await page.find(text, timeout=3000)
-                if verify_btn:
-                    logger.debug("Verify button found by text: %s", text)
-                    break
-            except Exception:
-                continue
-
-        # Fallback: generic selectors
-        if not verify_btn:
-            selectors = [
-                "button[type='submit']",
-                "button.submit",
-                "button.btn-primary",
-                "button:nth-child(1)",
-            ]
-            for selector in selectors:
-                try:
-                    verify_btn = await page.query_selector(selector, timeout=2000)
-                    if verify_btn:
-                        logger.debug("Verify button found via selector: %s", selector)
-                        break
-                except Exception:
-                    continue
-
-        if not verify_btn:
-            logger.error("Could not find verify button")
-            return False
-
-        # Click verify button
+        # Click submit button
         try:
-            await verify_btn.click()
-            logger.debug("Verify button clicked")
+            btn = await page.find("Se connecter", timeout=5)
+            if btn:
+                await btn.click()
+                logger.debug("'Se connecter' button clicked")
+            else:
+                # Fallback: find any submit-like button
+                btn = await page.query_selector("button[type='submit']")
+                if btn:
+                    await btn.click()
+                    logger.debug("Submit button clicked via selector")
+                else:
+                    logger.warning("No submit button found")
+                    return False
+
             await page.sleep(2)
             return True
+
         except Exception as e:
             logger.error("Failed to click verify button: %s", e, exc_info=True)
             return False
@@ -493,12 +477,12 @@ class Indy2FAAdapter:
         """
         start = time.monotonic()
         dashboard_patterns = [
-            "dashboard",
-            "accueil",
-            "home",
-            "accounts",
-            "transactions",
-            "/app",
+            "/dashboard",
+            "/pilotage",
+            "/accueil",
+            "/home",
+            "/accounts",
+            "/transactions",
         ]
 
         while time.monotonic() - start < timeout_sec:

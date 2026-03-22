@@ -62,9 +62,9 @@ async def main(headless: bool = True) -> None:
         logger.error("Required: GMAIL_IMAP_USER, GMAIL_IMAP_PASSWORD")
         return
 
-    # Load credentials from environment
-    indy_email = os.getenv("INDY_EMAIL")
-    indy_password = os.getenv("INDY_PASSWORD")
+    # Load credentials from settings (.env) with os.getenv fallback
+    indy_email = settings.indy_email or os.getenv("INDY_EMAIL")
+    indy_password = settings.indy_password or os.getenv("INDY_PASSWORD")
 
     if not indy_email or not indy_password:
         logger.error("Indy credentials not set in .env")
@@ -78,10 +78,13 @@ async def main(headless: bool = True) -> None:
     gmail_reader = GmailReader(settings)
     indy_2fa = Indy2FAAdapter()
 
-    # Launch nodriver browser
-    logger.info("Launching nodriver browser...")
+    # Launch nodriver browser with persistent profile (keeps Cloudflare cookies)
+    profile_dir = Path("io/cache/indy_chrome_profile")
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Launching nodriver browser (profile: %s)...", profile_dir)
     browser = await uc.start(
         headless=headless,
+        user_data_dir=str(profile_dir.resolve()),
         browser_args=[
             "--no-first-run",
             "--no-default-browser-check",
@@ -92,7 +95,7 @@ async def main(headless: bool = True) -> None:
         # Navigate to Indy login
         logger.info("Navigating to Indy login page...")
         page = await browser.get("https://app.indy.fr/connexion")
-        await page.sleep(3)  # Wait for page to load
+        await page.sleep(15)  # Wait for Turnstile to resolve
 
         # Take screenshot for debugging
         screenshot_file = Path("io/cache/indy_2fa_start.png")

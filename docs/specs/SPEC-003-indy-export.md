@@ -261,13 +261,49 @@ SAP-Facture opère en **LECTURE SEULE** sur Indy. Aucune modification comptable,
 
 5. **Mapping colonnes Indy non verifie** : les noms de colonnes CSV (`date_valeur`, `montant`, `libelle`, `type`) sont supposes. Les noms reels du Journal Book Indy n'ont pas ete valides contre un export reel.
 
+## Validation Terrain — 2026-03-22
+
+### Login Indy : VALIDE end-to-end
+
+Flow teste en reel sur app.indy.fr :
+
+1. **Nodriver bypass Turnstile** — OK avec profil Chrome persistent (`io/cache/indy_chrome_profile`)
+2. **Login email/password** — `send_keys` sur `input[type='email']` + `input[type='password']`
+3. **Detection page 2FA** — detectee via `input[type='text']` fallback (pas de patterns URL specifiques)
+4. **Gmail IMAP code 2FA** — sender = `support@indy.fr`, subject = "Votre code de connexion", code = 6 chiffres
+5. **Injection code** — 6 cases individuelles, digit par digit avec `send_keys` + 1s delay entre chaque
+6. **Click "Se connecter"** — via `page.find("Se connecter")`
+7. **Dashboard** — URL = `/pilotage` (pas `/dashboard`)
+
+### Corrections appliquees lors de la validation
+
+| Element | Avant (spec) | Apres (reel) |
+|---------|--------------|--------------|
+| Sender 2FA | `indy` (trop large, matche newsletters) | `support@indy.fr` |
+| URL dashboard | `/dashboard` | `/pilotage` |
+| nodriver `query_selector` | `timeout=` param | Pas de param timeout (pas supporte) |
+| nodriver `evaluate` | `page.evaluate(js, arg)` | IIFE inline (nodriver ne passe pas d'args) |
+| Input 2FA | Champ unique | 6 cases individuelles |
+| Injection code | `send_keys(code)` en une fois | Digit par digit + 1s delay |
+| Profil Chrome | Temporaire (`/tmp/uc_xxx`) | Persistent (`io/cache/indy_chrome_profile`) |
+| Wait Turnstile | 3s | 15s minimum |
+
+### Next Steps
+
+1. **Sync transactions** — depuis le dashboard Indy authentifie, naviguer vers l'onglet Transactions, scraper ou exporter les donnees (Playwright ou API REST si disponible)
+2. **Rapprochement bancaire** — matcher les transactions Indy vs factures Sheets selon l'algo de scoring (CDC §3.2)
+3. **Conversion PDF OCR** — si le releve bancaire est en PDF, OCR pour extraire les lignes de transactions et les injecter dans le pipeline de rapprochement
+
 ## Statut
 
-**Implemented (70%)**
+**Implemented (80%)**
 
-- Login Indy : OK (3 strategies implementees)
-- 2FA auto-inject : OK (nodriver + Gmail IMAP)
-- Export Journal Book CSV : OK (navigation + download)
+- Login Indy : **VALIDE EN REEL** (nodriver + 2FA Gmail IMAP)
+- 2FA auto-inject : **VALIDE EN REEL** (digit par digit, 6 cases)
+- Export Journal Book CSV : OK (navigation + download) — **A VALIDER EN REEL**
 - CSV parsing basique : OK (filtrage revenus, dedup, validation)
 - CSV parsing robuste : **MANQUANT** (encoding, separateur, format FR)
 - Integration onglet Transactions : a verifier
+- Sync transactions : **A FAIRE**
+- Rapprochement bancaire : **A FAIRE**
+- PDF OCR releve bancaire : **A FAIRE**
