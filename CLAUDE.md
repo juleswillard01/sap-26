@@ -1,130 +1,57 @@
-# SAP-Facture — Agent Teams Context
+# SAP-Facture — Orchestrateur
 
-## Source de Vérité Absolue
-Le fichier `docs/schemas/SCHEMAS.html` contient 8 diagrammes Mermaid qui définissent l'architecture complète :
+## Source de Vérité
+- `docs/schemas/SCHEMAS.html` — Schémas fonctionnels (INTOUCHABLE)
+- `docs/CDC.md` — Cahier des charges
 
-1. Parcours Utilisateur Quotidien
-2. Flux de Facturation End-to-End
-3. Séquence API URSSAF
-4. Architecture Système
-5. Modèle de Données (8 onglets Google Sheets)
-6. Rapprochement Bancaire & Lettrage
-7. Machine à États Facture (10 états, 17 transitions)
-8. Scope MVP vs Phases Futures
+## Qu'est-ce que SAP-Facture ?
+Orchestrateur qui synchronise AIS (facturation URSSAF), Indy (banque), Google Sheets (backend).
+**NE CRÉE PAS de factures. NE SOUMET PAS à URSSAF. SYNCHRONISE, RAPPROCHE et ALERTE.**
 
-**INTOUCHABLE** — toute architecture, code, ou documentation doit s'aligner dessus.
+## Décisions Verrouillées
+| ID | Décision | Justification |
+|----|----------|---------------|
+| D1 | AIS gère la facturation — SAP lit via Playwright (LECTURE) | Offre tout-en-un, pas d'API directe |
+| D2 | Google Sheets 8 onglets (gspread + Polars) | Backend flexible, éditabilité directe |
+| D3 | CREE → EN_ATTENTE immédiat | Simplification |
+| D4 | FastAPI SSR + Jinja2 + Tailwind | Stack léger, pas SPA |
+| D5 | Playwright Indy export Journal CSV | Pas d'API bancaire |
+| D6 | Lettrage semi-auto (système propose, Jules confirme) | MVP pragmatique |
+| D7 | Pas de génération PDF — AIS le fait | URSSAF demande PDF signé |
+| D8 | Python 3.12 + uv | Vitesse, déterminisme |
+| D9 | ruff strict + pyright strict + pytest ≥80% | Qualité non-négociable |
 
-## Décisions Verrouillées (2026-03-18)
+## Stack
+Python 3.12, uv, FastAPI+Jinja2+Tailwind, Click+Rich CLI, gspread v6+Polars, Playwright headless, SMTP Gmail, pytest
 
-| Décision | Détail |
-|----------|--------|
-| **D1: Polling URSSAF** | Toutes les 4 heures |
-| **D2: Email SMTP** | SAP-Facture (via `aiosmtplib`) |
-| **D3: États Facture** | CREE → EN_ATTENTE immédiat |
-| **D4: CLI FIRST** | Click CLI est l'interface principale, pas le web en MVP |
-| **D5: Indy + Playwright** | Scraping transactions bancaires **PAS Swan API** |
-| **D6: Lettrage Manuel** | Lettrage manuel en MVP, pas d'auto-lettrage |
-| **D7: PDF Prioritaire** | PDF factures prioritaires, stockage Google Drive |
-
-## Stack Technique
-- **Python 3.11+**, FastAPI, Click CLI
-- **Pydantic v2** — validation stricte
-- **Google Sheets API v4** (gspread) — backend database
-- **WeasyPrint** — génération PDF
-- **Playwright** — Indy banking scraping
-- **aiosmtplib** — notifications email
-- **pytest, ruff, mypy --strict** — qualité code
-
-Dev: `pip install -e ".[dev]"` | Tests: `pytest --cov=app --cov-fail-under=80`
-
-Google Sheets: service account JSON base64 in `.env` (GOOGLE_SERVICE_ACCOUNT_B64). Voir `.env.example` pour toutes les variables.
-
-## Architecture (4 couches)
-
+## Architecture
 ```
-┌─────────────────────────────────────┐
-│  Présentation: CLI (Click) + Web    │
-├─────────────────────────────────────┤
-│  Métier: Services (Facture, Email)  │
-├─────────────────────────────────────┤
-│  Accès: SheetsAdapter               │
-├─────────────────────────────────────┤
-│  Intégrations: URSSAF, Indy, PDF    │
-└─────────────────────────────────────┘
+src/
+├── adapters/    # AIS, Indy, Sheets, Email (Playwright LECTURE)
+├── services/    # PaymentTracker, BankReconciliation, Notifications, NOVA, Cotisations
+├── models/      # Pydantic v2 (Client, Invoice, Transaction, Sheets)
+├── templates/   # Jinja2 emails
+├── config.py    # pydantic-settings
+├── app.py       # FastAPI
+└── cli.py       # Click CLI
 ```
 
-## Structure Projet
-
+## Setup
+```bash
+uv sync
+uv run pytest --cov=src --cov-fail-under=80
+uv run ruff check --fix src/ tests/ && uv run ruff format src/ tests/
+uv run pyright --strict src/
 ```
-app/
-├── main.py           # FastAPI factory
-├── config.py         # Pydantic Settings (.env)
-├── adapters/         # SheetsAdapter, URSSAFClient, IndyBrowserAdapter
-├── models/           # Pydantic v2 models
-├── services/         # Business logic
-└── routers/          # FastAPI endpoints
-
-tests/
-├── unit/             # No I/O
-├── conftest.py       # Shared fixtures
-```
-
-## Règles de Code — STRICTES
-
-### Type Safety
-- Type hints sur **TOUTES** les signatures (params + return)
-- `from __future__ import annotations` en haut de chaque fichier
-- Pydantic v2 `BaseModel` pour toutes structures de données
-- `mypy --strict` doit passer sans erreurs
-
-### Qualité
-- `ruff check --fix && ruff format` avant tout commit
-- Max 200-400 lignes par fichier, 50 lignes par fonction
-- Max 3 niveaux d'indentation
-- `snake_case` fonctions/variables, `PascalCase` classes
-
-### Patterns Obligatoires
-- Repository pattern pour data access
-- Services layer pour la logique métier
-- Dependency injection dans constructeurs
-- logging (jamais `print()`)
-- pathlib (jamais `os.path`)
-
-### Testing
-- **80% minimum coverage** (`pytest --cov-fail-under=80`)
-- Tests requirement-driven, pas implementation-driven
-- Couvrir: happy path, edge cases, error handling, state transitions
-- Mock ALL external APIs (URSSAF, Google Sheets, Indy)
-- Nommer tests: `test_<what>_<condition>_<expected>`
-
-## Livrables BMAD
-
-Tous les livrables sont en **HTML dark-theme** (Mermaid inclus) dans `docs/bmad/deliverables/`.
-
-Templates de base dans `bmad/templates/` :
-- `architecture-template.html` — architecture diagrams
-- `prd-template.html` — product requirements
-- `review-report-template.html` — code review results
-- `sprint-board-template.html` — sprint status
-- `test-plan-template.html` — test coverage & results
-
-**Injection helper** : `bmad/templates/inject.py` remplace `{{PLACEHOLDER}}` markers avec valeurs JSON.
 
 ## INTERDIT
-
-- Toute référence à Swan ou Swan API
-- Lettrage automatique en MVP
-- Web dashboard en MVP (CLI first)
-- `print()` au lieu de `logging`
-- `os.path` au lieu de `pathlib`
-- Secrets en dur dans le code
-- Cross-package imports relatifs
-- Fonctions > 50 lignes
-- Fichiers > 400 lignes
-
-## Contacts & Escalade
-
-- **Product Owner** : Jules Willard (project lead)
-- **Architecture Decision** : voir `bmad/ARCHITECTURE.md`
-- **Agent Manifest** : `bmad/AGENT-MANIFEST.md`
-- **Workflows** : `bmad/workflows/`
+- Créer des factures (AIS le fait)
+- Soumettre à URSSAF (AIS le fait)
+- Générer des PDF factures (AIS le fait)
+- Inscrire des clients URSSAF (AIS le fait)
+- Modifier SCHEMAS.html
+- print() dans src/ (logging obligatoire)
+- Stocker des secrets dans le code (.env obligatoire)
+- Écrire du code sans tests
+- Utiliser pip/poetry (uv obligatoire)
+- os.path (pathlib obligatoire)

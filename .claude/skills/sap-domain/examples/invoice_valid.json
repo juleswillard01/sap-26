@@ -1,0 +1,19 @@
+{
+  "facture_id": "F001",
+  "client_id": "C123",
+  "type_unite": "HEURE",
+  "nature_code": "COURS_PARTICULIERS",
+  "quantite": 2.5,
+  "montant_unitaire": 50.0,
+  "montant_total": 125.0,
+  "date_debut": "2026-01-15",
+  "date_fin": "2026-01-31",
+  "description": "Cours de maths 1er S, semaines 1-4",
+  "statut": "EN_ATTENTE",
+  "urssaf_demande_id": "URX-2026-000123",
+  "date_soumission": "2026-01-15",
+  "date_validation": "2026-01-16",
+  "date_paiement": null,
+  "date_rapprochement": null,
+  "pdf_drive_id": "1A2B3C4D5E6F"
+}

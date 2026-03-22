@@ -1,0 +1,122 @@
+[
+  {
+    "transaction_id": "TXN-001",
+    "indy_id": "TRX-001",
+    "date_valeur": "2026-02-10",
+    "montant": 90.0,
+    "libelle": "URSSAF Paris - Facture F001",
+    "type": "URSSAF_PAYMENT",
+    "source": "INDY",
+    "facture_id": "F001",
+    "statut_lettrage": "LETTRE",
+    "date_import": "2026-02-10"
+  },
+  {
+    "transaction_id": "TXN-002",
+    "indy_id": "TRX-002",
+    "date_valeur": "2026-02-28",
+    "montant": 75.0,
+    "libelle": "URSSAF Paris - Facture F002",
+    "type": "URSSAF_PAYMENT",
+    "source": "INDY",
+    "facture_id": "F002",
+    "statut_lettrage": "EN_ATTENTE",
+    "date_import": "2026-02-28"
+  },
+  {
+    "transaction_id": "TXN-003",
+    "indy_id": "TRX-003",
+    "date_valeur": "2026-03-05",
+    "montant": 60.0,
+    "libelle": "URSSAF Paris - Facture F003",
+    "type": "URSSAF_PAYMENT",
+    "source": "INDY",
+    "facture_id": "F003",
+    "statut_lettrage": "EN_ATTENTE",
+    "date_import": "2026-03-05"
+  },
+  {
+    "transaction_id": "TXN-004",
+    "indy_id": "TRX-004",
+    "date_valeur": "2026-03-02",
+    "montant": 90.5,
+    "libelle": "URSSAF Paris - Paiement partiel",
+    "type": "URSSAF_PAYMENT",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "DIVERGENCE",
+    "date_import": "2026-03-02"
+  },
+  {
+    "transaction_id": "TXN-005",
+    "indy_id": "TRX-005",
+    "date_valeur": "2026-03-12",
+    "montant": 74.5,
+    "libelle": "URSSAF Paris - Paiement partiel",
+    "type": "URSSAF_PAYMENT",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "DIVERGENCE",
+    "date_import": "2026-03-12"
+  },
+  {
+    "transaction_id": "TXN-006",
+    "indy_id": "TRX-006",
+    "date_valeur": "2026-02-05",
+    "montant": 1500.0,
+    "libelle": "Virement reçu - Client ABC Inc",
+    "type": "VIREMENT_RECU",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "NON_LETTRE",
+    "date_import": "2026-02-05"
+  },
+  {
+    "transaction_id": "TXN-007",
+    "indy_id": "TRX-007",
+    "date_valeur": "2026-02-08",
+    "montant": 250.0,
+    "libelle": "Frais bancaires février",
+    "type": "FRAIS",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "NON_LETTRE",
+    "date_import": "2026-02-08"
+  },
+  {
+    "transaction_id": "TXN-008",
+    "indy_id": "TRX-008",
+    "date_valeur": "2026-03-03",
+    "montant": 500.0,
+    "libelle": "Achat fournitures pédagogiques",
+    "type": "ACHAT",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "NON_LETTRE",
+    "date_import": "2026-03-03"
+  },
+  {
+    "transaction_id": "TXN-009",
+    "indy_id": "TRX-009",
+    "date_valeur": "2026-03-08",
+    "montant": 2000.0,
+    "libelle": "Virement reçu - Rémunération XYZ",
+    "type": "VIREMENT_RECU",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "NON_LETTRE",
+    "date_import": "2026-03-08"
+  },
+  {
+    "transaction_id": "TXN-010",
+    "indy_id": "TRX-010",
+    "date_valeur": "2026-03-15",
+    "montant": 100.0,
+    "libelle": "Prélèvement assurance responsabilité civile",
+    "type": "PRELEVEMENT",
+    "source": "INDY",
+    "facture_id": null,
+    "statut_lettrage": "NON_LETTRE",
+    "date_import": "2026-03-15"
+  }
+]

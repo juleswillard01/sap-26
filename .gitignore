@@ -1,36 +1,35 @@
-# Environment
+# Secrets
 .env
-.env.local
-.env.*.local
+.env.*
+*.pem
+*.key
+*credentials*.json
+*service-account*
+credentials/
 
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.egg-info/
+dist/
+build/
 .venv/
-venv/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Linting / Type-checking
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.mypy_cache/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Coverage / Linting / Type checking
+# Coverage
 htmlcov/
 .coverage
-.coverage.*
-.ruff_cache/
-.mypy_cache/
-.pytest_cache/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Research / Cache
+io/
+
+# Plugins
+.playwright-mcp/
+
+# Assets recherche
+*.tar.gz
+docs/avance-immediate-homepage.png

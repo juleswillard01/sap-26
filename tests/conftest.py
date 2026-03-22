@@ -1,59 +1,278 @@
-"""
-Pytest configuration and shared fixtures.
+"""Shared test fixtures for SAP-Facture.
 
-Usage: pytest auto-discovers and uses these fixtures
-Reference: docs/phase3/test-strategy.md section 2
+Provides reusable fixtures for Settings, gspread mocking, JSON fixture data,
+factory_boy factories, and freezegun time freezing.
 """
 
 from __future__ import annotations
 
-import base64
 import json
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.config import Settings
-from app.main import create_app
+from src.config import Settings
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+# Fix UTC import for Python 3.10 compatibility before any imports from adapters
+
+
+# ──────────────────────────────────────────────
+# Settings
+# ──────────────────────────────────────────────
 
 
 @pytest.fixture
-def test_settings() -> Settings:
-    """Test configuration."""
-    # Create a minimal valid Google Service Account JSON for testing
-    service_account = {
-        "type": "service_account",
-        "project_id": "test-project",
-        "private_key_id": "test-key-id",
-        "private_key": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA2a2rwplBCWHZo2a5c8K8eFDzaJjYCpx1L3dxeMyLQWYpYAVy\nX8pgVzlKhNkLvgODL7VUg0nQ6w3L7nh8S9Z3B3hDxL6dF9XzPZ0zBLaL5qZ5qL8m\nV8TfTlqUZn3pN2LxI8EqF8vV0K0f7S6X8z0L6c0F5d9Z0L7g8M2H4n3J9P4K8r1\nA3b5C2d7E1f9G3h4J4k6L8M9O5N6P7Q9R8S0T2U3V4W5X6Y7Z8a9B0c1D2e3F4g\nQIDAQABAoIBABr+qyaXKmZzVS2qVJTqCx8P8z3L3c2K4b1J1a0I9Y9X8w7V6u5T\n4s3R2r1P0o9N9m7L8k5J3i3H2g1F0e9D0c8Vz1U7T2S8y+wvUtRq0pzsJRnMoLpn\nA3KBpOECgYEA/Vn1nA7l8w9Q8p1M0l7K3i2J1h0I9G8F0e7D2c6VxlU5T0S3r2Q\n3p1O9n0N2m1L7k4J4j3I2h1G1f0E0d7Vw1U6T1S4r3P3o0N8m0L6k3I3i2H1g0\nF0eAgEz7B5d8C2wvUtSq1Z0l5M9C/6F/8G+hKJZ2/xkxLxkW4+9NlZMCgYEA2+V7\n/mq5f8v7s9r2q8n1p7m0o7l9k8j3i7g1f6e0d5c9b4a8Z8b7a6c5d3e3f2g1h9\nKJI1z3qz0zBbMoLpmA2KBpOECgYEApKzd/s5FzVvQttj0p7n1q8m0p7l9k8j3i7g\n1f6e0d5c9b4a8Z8b7a6c5d3e3f2g1h2jKJJ2z4rz1zCcNoLpnA3LBqPFDhIUKnZM\nOJbj2CPsQ4L1n2d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7a8b\nCgYEA6h8G+9c4e2i3m8k9l2j0h8f7d5c3b1a9Z7y5x3w1v9u7t5s3r1q9p7o5n3\nm1l9k7j5i3h1g9f7e5d3c1b9a7z5y3x1w9v7u5t3s1r9q7p5o3n1m9l7k5j3i1h\nKBgQCjdw8sKzTn0xYU8QZdkW/5P0h0Z5W3V1U2T0R9Q7P2O1N8M7L6K5J4I3H2G1\nF0E9D8C7Vx1U4T3S0R5Q6P1O0N7M6L5K4J3I2H1G0F9E8D7C6Vw==\n-----END RSA PRIVATE KEY-----",
-        "client_email": "test@test-project.iam.gserviceaccount.com",
-        "client_id": "123456789",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-    }
-    service_account_b64 = base64.b64encode(json.dumps(service_account).encode()).decode()
-
+def settings() -> Settings:
+    """Test settings with dummy credentials (no .env needed)."""
     return Settings(
-        SPREADSHEET_ID="test-sheet-id",
-        URSSAF_CLIENT_ID="test-urssaf-id",
-        URSSAF_CLIENT_SECRET="test-urssaf-secret",
-        SWAN_API_KEY="test-swan-key",
-        SWAN_ACCOUNT_ID="test-swan-account",
-        SMTP_HOST="localhost",
-        SMTP_USERNAME="test",
-        SMTP_PASSWORD="test",
-        GOOGLE_SERVICE_ACCOUNT_B64=service_account_b64,
-        API_KEY_INTERNAL="test-api-key-that-is-at-least-32-characters-long",
+        google_sheets_spreadsheet_id="test-spreadsheet-id",
+        google_service_account_file=Path("/tmp/fake-sa.json"),
+        sheets_cache_ttl=30,
+        sheets_rate_limit=60,
+        circuit_breaker_fail_max=5,
+        circuit_breaker_reset_timeout=60,
+        smtp_host="smtp.gmail.com",
+        smtp_port=587,
+        smtp_user="test@gmail.com",
+        smtp_password="test-app-password",
+        notification_email="jules@example.com",
+        indy_email="test@indy.fr",
+        indy_password="test-password",
+        gmail_imap_user="test@gmail.com",
+        gmail_imap_password="test-imap-password",
+        ais_email="test@ais.fr",
+        ais_password="test-ais-password",
     )
 
 
-@pytest.fixture
-def app(test_settings: Settings):
-    """FastAPI test app."""
-    return create_app(test_settings)
+# ──────────────────────────────────────────────
+# Gspread mocking
+# ──────────────────────────────────────────────
 
 
 @pytest.fixture
-def client(app):
-    """FastAPI test client."""
-    return TestClient(app)
+def mock_gspread() -> Any:
+    """Mock gspread.service_account and return mock spreadsheet."""
+    with patch("gspread.service_account") as mock_sa:
+        mock_client = MagicMock()
+        mock_spreadsheet = MagicMock()
+        mock_sa.return_value = mock_client
+        mock_client.open_by_key.return_value = mock_spreadsheet
+
+        # Auto-configure any worksheet to have get_all_records
+        def configure_worksheet(ws: MagicMock) -> MagicMock:
+            """Ensure worksheet has all required mocked methods."""
+            if not callable(ws.get_all_records) or ws.get_all_records.return_value is None:
+                ws.get_all_records.return_value = []
+            if not callable(ws.append_rows):
+                ws.append_rows.return_value = None
+            if not callable(ws.update):
+                ws.update.return_value = None
+            return ws
+
+        # Make worksheet method configurable but auto-fix mocks
+        original_return_value = None
+
+        def worksheet_wrapper(sheet_name: str) -> MagicMock:
+            nonlocal original_return_value
+            # If return_value was set, use it but ensure it's properly configured
+            if mock_spreadsheet.worksheet.return_value is not original_return_value:
+                original_return_value = mock_spreadsheet.worksheet.return_value
+                return configure_worksheet(original_return_value)
+            # Otherwise create default
+            mock_ws = MagicMock()
+            return configure_worksheet(mock_ws)
+
+        # Use a trick: make worksheet a callable that uses side_effect
+        mock_spreadsheet.worksheet.side_effect = worksheet_wrapper
+
+        yield mock_spreadsheet
+
+
+@pytest.fixture
+def mock_worksheet() -> MagicMock:
+    """Mock gspread Worksheet with standard methods."""
+    ws = MagicMock()
+    ws.get_all_records.return_value = []
+    ws.append_rows.return_value = None
+    ws.update.return_value = None
+    ws.title = "TestSheet"
+    return ws
+
+
+# ──────────────────────────────────────────────
+# JSON Fixture Data
+# ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def adapter(mock_gspread: MagicMock, settings: Any) -> Any:
+    """Test adapter with proper mocks for FK validation and worksheet access."""
+    from unittest.mock import MagicMock
+
+    from src.adapters.sheets_adapter import SheetsAdapter
+
+    adapter = SheetsAdapter(settings)
+
+    # Mock _validate_fk to always return True (tests don't need FK validation)
+    adapter._validate_fk = MagicMock(return_value=True)
+
+    # Mock _get_worksheet to return configured mocks
+    def mock_get_worksheet(sheet_name: str) -> MagicMock:
+        ws = MagicMock()
+        ws.get_all_records.return_value = []
+        ws.append_rows.return_value = None
+        ws.update.return_value = None
+        ws.clear = MagicMock(return_value=None)
+        return ws
+
+    adapter._get_worksheet = mock_get_worksheet
+
+    yield adapter
+    adapter.close()
+
+
+@pytest.fixture
+def clients_data() -> list[dict[str, Any]]:
+    """Load clients fixture data."""
+    return json.loads((FIXTURES_DIR / "clients.json").read_text())
+
+
+@pytest.fixture
+def invoices_data() -> list[dict[str, Any]]:
+    """Load invoices fixture data."""
+    return json.loads((FIXTURES_DIR / "invoices.json").read_text())
+
+
+@pytest.fixture
+def transactions_data() -> list[dict[str, Any]]:
+    """Load transactions fixture data."""
+    return json.loads((FIXTURES_DIR / "transactions.json").read_text())
+
+
+# ──────────────────────────────────────────────
+# Factory helpers (lightweight, no factory_boy dep in signatures)
+# ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def make_client() -> Any:
+    """Factory for client dicts."""
+
+    def _make(
+        client_id: str = "C001",
+        nom: str = "Dupont",
+        prenom: str = "Alice",
+        email: str = "alice@example.com",
+        statut_urssaf: str = "INSCRIT",
+        actif: bool = True,
+        **overrides: Any,
+    ) -> dict[str, Any]:
+        data = {
+            "client_id": client_id,
+            "nom": nom,
+            "prenom": prenom,
+            "email": email,
+            "telephone": "",
+            "adresse": "",
+            "code_postal": "",
+            "ville": "",
+            "urssaf_id": f"URF-{client_id[1:]}",
+            "statut_urssaf": statut_urssaf,
+            "date_inscription": "2026-01-15",
+            "actif": actif,
+        }
+        data.update(overrides)
+        return data
+
+    return _make
+
+
+@pytest.fixture
+def make_invoice() -> Any:
+    """Factory for invoice dicts."""
+
+    def _make(
+        facture_id: str = "F001",
+        client_id: str = "C001",
+        montant_total: float = 90.0,
+        statut: str = "PAYE",
+        date_paiement: str = "2026-02-15",
+        **overrides: Any,
+    ) -> dict[str, Any]:
+        data = {
+            "facture_id": facture_id,
+            "client_id": client_id,
+            "type_unite": "HEURE",
+            "nature_code": "COURS_PARTICULIERS",
+            "quantite": 2.0,
+            "montant_unitaire": 45.0,
+            "montant_total": montant_total,
+            "date_debut": "2026-02-01",
+            "date_fin": "2026-02-28",
+            "description": "Cours maths",
+            "statut": statut,
+            "urssaf_demande_id": "",
+            "date_soumission": "",
+            "date_validation": "",
+            "date_paiement": date_paiement,
+            "date_rapprochement": "",
+            "pdf_drive_id": "",
+        }
+        data.update(overrides)
+        return data
+
+    return _make
+
+
+@pytest.fixture
+def make_transaction() -> Any:
+    """Factory for transaction dicts."""
+
+    def _make(
+        transaction_id: str = "TRX-001",
+        indy_id: str = "INDY-001",
+        montant: float = 90.0,
+        date_valeur: str = "2026-02-16",
+        libelle: str = "VIREMENT URSSAF",
+        statut_lettrage: str = "NON_LETTRE",
+        **overrides: Any,
+    ) -> dict[str, Any]:
+        data = {
+            "transaction_id": transaction_id,
+            "indy_id": indy_id,
+            "date_valeur": date_valeur,
+            "montant": montant,
+            "libelle": libelle,
+            "type": "credit",
+            "source": "indy",
+            "facture_id": "",
+            "statut_lettrage": statut_lettrage,
+            "date_import": "2026-02-17",
+        }
+        data.update(overrides)
+        return data
+
+    return _make
+
+
+# ──────────────────────────────────────────────
+# Time fixtures
+# ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def now_utc() -> datetime:
+    """Fixed UTC timestamp for deterministic tests."""
+    return datetime(2026, 3, 21, 14, 0, 0)
+
+
+@pytest.fixture
+def today() -> date:
+    """Fixed date for deterministic tests."""
+    return date(2026, 3, 21)
