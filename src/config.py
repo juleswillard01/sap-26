@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Indy
     indy_email: str = ""
     indy_password: str = ""
+    indy_api_base_url: str = "https://app.indy.fr"
+    indy_api_timeout_sec: int = 30
+    indy_firebase_api_key: str = "AIzaSyAVJ8xwjy0uG-zgPKQKUADa2-c-4KKHryI"
 
     # Gmail IMAP (for 2FA code extraction during Indy automation)
     gmail_imap_user: str = ""
