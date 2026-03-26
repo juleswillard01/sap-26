@@ -30,6 +30,9 @@ io/
 # Plugins
 .playwright-mcp/
 
+# Worktrees
+.worktrees/
+
 # Assets recherche
 *.tar.gz
 docs/avance-immediate-homepage.png
