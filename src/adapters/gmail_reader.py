@@ -141,10 +141,18 @@ class GmailReader:
             else:
                 self._connection.select("INBOX")
 
-            # Search for unseen emails
-            status, messages = self._connection.search(None, "UNSEEN")
+            # Search for recent emails from sender (today, read or unread)
+            import datetime
+
+            today = datetime.datetime.now(tz=datetime.UTC).strftime("%d-%b-%Y")
+            status, messages = self._connection.search(
+                None, f'(FROM "{sender_filter}" SINCE "{today}" SUBJECT "code")'
+            )
             if status != "OK" or not messages[0]:
-                return None
+                # Fallback: try UNSEEN only
+                status, messages = self._connection.search(None, "UNSEEN")
+                if status != "OK" or not messages[0]:
+                    return None
 
             msg_ids = messages[0].split()
             # Check most recent emails first (last 10)
