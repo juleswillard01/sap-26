@@ -1,0 +1,41 @@
+date_valeur;montant;libelle;type
+2026-02-10;90.0;VIREMENT URSSAF;revenus
+2026-02-22;75.0;VIR DUPONT;revenus
+2026-03-09;120.0;VIREMENT URSSAF;revenus
+2026-01-25;45.0;URSSAF PAIEMENT;revenus
+2026-01-16;80.0;URSSAF VIREMENT;revenus
+2026-02-06;55.0;URSSAF COTIS;revenus
+2026-02-26;100.0;URSSAF VIREMENT;revenus
+2026-01-10;65.0;URSSAF VIREMENT JANVIER;revenus
+2026-01-22;110.0;URSSAF REGUL JANVIER;revenus
+2026-02-03;42.0;URSSAF COMPLEMENT FEVRIER;revenus
+2026-02-14;88.0;URSSAF VIR FEVRIER;revenus
+2026-02-18;73.0;URSSAF PAIEMENT FEVRIER;revenus
+2026-03-01;95.0;URSSAF VIREMENT MARS;revenus
+2026-03-12;58.0;URSSAF REGUL MARS;revenus
+2026-03-18;130.0;URSSAF PAIEMENT MARS;revenus
+2026-01-05;200.0;URSSAF REGUL DECEMBRE;revenus
+2026-01-30;150.0;URSSAF COMPLEMENT JANVIER;revenus
+2026-02-28;175.0;URSSAF VIR FIN FEVRIER;revenus
+2026-03-25;85.0;URSSAF PAIEMENT Q1;revenus
+2026-03-30;220.0;URSSAF SOLDE MARS;revenus
+2026-01-08;1500.0;Virement recu - Client professionnel;revenus
+2026-01-20;-350.0;Virement sortant - Loyer bureau;depenses
+2026-02-05;-89.9;Prelevement EDF Electricite;prelevement
+2026-02-15;2000.0;Virement recu - Remuneration formation;revenus
+2026-02-20;-250.0;Virement sortant - Assurance RC Pro;depenses
+2026-03-01;-45.0;Prelevement telephone mobile;prelevement
+2026-03-05;500.0;Virement recu - Remboursement frais;revenus
+2026-03-10;-120.0;Achat fournitures pedagogiques;depenses
+2026-03-15;-75.5;Prelevement mutuelle sante;prelevement
+2026-03-22;800.0;Virement recu - Honoraires conseil;revenus
+2026-01-02;67.0;URSSAF PAIEMENT RETARD;revenus
+2026-02-08;33.0;URSSAF COMPLEMENT;revenus
+2026-02-28;47.5;URSSAF REGUL FEVRIER;revenus
+2026-03-20;102.0;URSSAF PAIEMENT TARDIF;revenus
+2026-03-28;55.0;URSSAF SOLDE FINAL;revenus
+2026-02-10;90.0;VIREMENT URSSAF;revenus
+2026-01-25;45.0;URSSAF PAIEMENT;revenus
+2026-01-16;80.0;URSSAF VIREMENT;revenus
+2026-01-08;1500.0;Virement recu - Client professionnel;revenus
+2026-01-20;-350.0;Virement sortant - Loyer bureau;depenses
