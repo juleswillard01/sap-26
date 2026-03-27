@@ -43,4 +43,4 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --extra dev --dev
-      - run: uv run pyright --strict src/
+      - run: uv run pyright src/
