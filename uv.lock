@@ -3315,6 +3315,7 @@ dev = [
 dev = [
     { name = "factory-boy" },
     { name = "freezegun" },
+    { name = "pyright" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
 ]
@@ -3358,6 +3359,7 @@ provides-extras = ["dev"]
 dev = [
     { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "freezegun", specifier = ">=1.5.5" },
+    { name = "pyright", specifier = ">=1.1.408" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-mock", specifier = ">=3.15.1" },
 ]
