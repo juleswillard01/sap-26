@@ -155,6 +155,27 @@ def transactions_data() -> list[dict[str, Any]]:
     return json.loads((FIXTURES_DIR / "transactions.json").read_text())
 
 
+@pytest.fixture
+def master_dataset() -> dict[str, Any]:
+    """Load master dataset with FK validation — MPP-21."""
+    data = json.loads((FIXTURES_DIR / "master_dataset.json").read_text())
+
+    client_ids = {c["client_id"] for c in data["clients"]}
+    facture_ids = {f["facture_id"] for f in data["factures"]}
+
+    for f in data["factures"]:
+        if f["client_id"] not in client_ids:
+            msg = f"FK violation: {f['facture_id']}.client_id={f['client_id']}"
+            raise ValueError(msg)
+
+    for t in data["transactions"]:
+        if t.get("facture_id") and t["facture_id"] not in facture_ids:
+            msg = f"FK violation: {t['transaction_id']}.facture_id={t['facture_id']}"
+            raise ValueError(msg)
+
+    return data
+
+
 # ──────────────────────────────────────────────
 # Factory helpers (lightweight, no factory_boy dep in signatures)
 # ──────────────────────────────────────────────
