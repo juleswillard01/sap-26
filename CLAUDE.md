@@ -22,19 +22,23 @@ Orchestrateur qui synchronise AIS (facturation URSSAF), Indy (banque), Google Sh
 | D9 | ruff strict + pyright strict + pytest ≥80% | Qualité non-négociable |
 
 ## Stack
-Python 3.12, uv, FastAPI+Jinja2+Tailwind, Click+Rich CLI, gspread v6+Polars, Playwright headless, SMTP Gmail, pytest
+Python 3.12, uv, FastAPI+Jinja2+Tailwind, Click+Rich CLI, gspread v6+Polars, httpx, Playwright headless, nodriver, SMTP Gmail, pytest
 
 ## Architecture
 ```
 src/
-├── adapters/    # AIS, Indy, Sheets, Email (Playwright LECTURE)
+├── adapters/    # AIS REST+Playwright, Indy REST+nodriver, Sheets gspread, Gmail IMAP, Email SMTP
 ├── services/    # PaymentTracker, BankReconciliation, Notifications, NOVA, Cotisations
-├── models/      # Pydantic v2 (Client, Invoice, Transaction, Sheets)
+├── models/      # Pydantic v2 + Patito (Client, Invoice, Transaction, Sheets)
 ├── templates/   # Jinja2 emails
 ├── config.py    # pydantic-settings
 ├── app.py       # FastAPI
 └── cli.py       # Click CLI
 ```
+
+## CI
+- GitHub Actions: 3 jobs (lint, test, typecheck)
+- Quality gate: 80% coverage minimum
 
 ## Setup
 ```bash
