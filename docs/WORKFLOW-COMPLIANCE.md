@@ -217,36 +217,48 @@ La configuration est presente. L'execution effective par module n'est pas tracee
 ## P1 Compliance Report
 
 Date: 2026-03-28
-Scope: PRs #37 through #50 merged during P1 sprint
+Scope: PRs #37 through #53 merged during P1 sprint + 1 manual research task
 
 ### PR-Level Golden Workflow Adherence
 
-| PR | Description | PLAN | TDD | GREEN | REVIEW | VERIFY | COMMIT | REFACTOR |
-|----|-------------|------|-----|-------|--------|--------|--------|----------|
-| #37 | Indy login (nodriver + Firebase JWT) | Yes | Yes | Yes | Yes | Yes | Yes | N/A |
-| #38 | Ghost tests removal + real assertions | Yes | Yes | Yes | Yes | Yes | Yes | N/A |
-| #39 | IndyAPI REST httpx adapter | Yes | Yes | Yes | Yes | Yes | Yes | N/A |
-| #40 | Branching strategy docs | N/A (docs) | N/A | N/A | Yes | Yes | Yes | N/A |
-| #41 | Fixture master (10 clients, 25 factures, 40 txn) | Yes | Yes | Yes | Yes | Yes | Yes | N/A |
-| #43 | CI pipeline (GitHub Actions) | Yes | N/A (infra) | N/A | Yes | Yes | Yes | N/A |
-| #48 | AIS integration tests | Yes | Yes | Yes | Yes | Yes | Yes | N/A |
-| #50 | AIS Playwright fallback | Yes | Yes | Yes | Yes | Yes | Yes | N/A |
+| MPP | PR | Type | PLAN | TDD | GREEN | REVIEW | VERIFY | COMMIT |
+|-----|-----|------|------|-----|-------|--------|--------|--------|
+| MPP-38 | #37 | merge | Yes | N/A | N/A | Yes | Yes | Yes |
+| MPP-56 | #38, #42 | fix | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-65 | #39 | feat | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-37 | #40 | docs | N/A | N/A | N/A | Yes | Yes | Yes |
+| MPP-21 | #41 | feat | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-39 | #43 | ci | Yes | N/A | N/A | Yes | Yes | Yes |
+| MPP-24 | #44 | test | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-58 | #45 | test | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-26 | #46 | test | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-66 | #48 | test | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-53 | #49 | fix | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-48 | #50 | feat | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-67 | #51 | test | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-51 | #52 | feat | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-25 | #53 | test | Yes | Yes | Yes | Yes | Yes | Yes |
+| MPP-64 | manual | research | N/A | N/A | N/A | N/A | N/A | N/A |
 
 ### Compliance Rate: 100%
 
-All 8 PRs followed the Golden Workflow appropriate to their type:
-- **6/8 PRs** (code): full PLAN-TDD-GREEN-REVIEW-VERIFY-COMMIT cycle
-- **1/8 PR** (#40 docs): REVIEW-VERIFY-COMMIT only (no code, docs-only change)
-- **1/8 PR** (#43 infra): PLAN-REVIEW-VERIFY-COMMIT (CI YAML, no TDD applicable)
+All 16 items followed the Golden Workflow appropriate to their type:
+- **10/16** (code: feat/fix/test): full PLAN-TDD-GREEN-REVIEW-VERIFY-COMMIT cycle
+- **1/16** (MPP-37 #40 docs): REVIEW-VERIFY-COMMIT only (no code, docs-only change)
+- **1/16** (MPP-38 #37 merge): PLAN-REVIEW-VERIFY-COMMIT (infrastructure merge, no TDD applicable)
+- **1/16** (MPP-39 #43 ci): PLAN-REVIEW-VERIFY-COMMIT (CI YAML, no TDD applicable)
+- **2/16** (MPP-56 #38/#42): fix across two PRs, full cycle on both
+- **1/16** (MPP-64 manual): research task, no code deliverable
 
 ### Deviations
 
-| ID | PR | Deviation | Justification |
-|----|----|-----------|---------------|
-| D2 | #37 | Simplified workflow for merge commit | Infrastructure merge task, not feature code |
-| D3 | #43 | No TDD phase | CI YAML pipeline — no testable application code |
-| D4 | #48 | Parallel subagents with internal TDD | Integration tests against real AIS — TDD executed within subagent |
-| D5 | #50 | Parallel subagents with internal TDD | Playwright fallback adapter — TDD executed within subagent |
+| ID | MPP | PR | Deviation | Justification |
+|----|-----|----|-----------|---------------|
+| D2 | MPP-38 | #37 | Simplified workflow for merge commit | Infrastructure merge task, not feature code |
+| D3 | MPP-39 | #43 | No TDD phase | CI YAML pipeline — no testable application code |
+| D4 | MPP-66 | #48 | Parallel subagents with internal TDD | Integration tests against real AIS — TDD executed within subagent |
+| D5 | MPP-48 | #50 | Parallel subagents with internal TDD | Playwright fallback adapter — TDD executed within subagent |
+| D6 | MPP-64 | manual | No Golden Workflow phases | Research task (Indy reverse-engineering), no code committed |
 
 All deviations are justified by task type. No compliance violations detected.
 

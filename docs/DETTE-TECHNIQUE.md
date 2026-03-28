@@ -40,15 +40,15 @@ Date : 2026-03-28
 
 ## Resolved in P1
 
-| Probleme | Resolution |
-|----------|------------|
-| Ghost tests in `test_bank_reconciliation.py` — ACT/ASSERT commentes | FIXED (PR #38, commit `328bc99`) |
-| No CI pipeline | FIXED (PR #43) |
-| No integration tests | FIXED (PR #48) |
-| No Playwright fallback for AIS | FIXED (PR #50, commit `fa60e5c`) |
-| No master test fixture | FIXED (PR #41, commit `6ebac6b`) |
-| `GmailAPIReader.connect()` service account vs user token incompatibility | FIXED (PR #49, commit `745b5db`) |
-| NOVA skill deadline "fin du mois" au lieu de "15 du mois" | FIXED (docs corrected) |
+| Item | Resolution | Linear | GitHub |
+|------|-----------|--------|--------|
+| Ghost tests (0 assertions) | 11 removed, 5 real added | MPP-56 | #38, #42 |
+| PaymentTracker coverage 66% | 24 tests, now 96% | MPP-58 | #45 |
+| No CI pipeline | 3 parallel jobs | MPP-39 | #43 |
+| No integration tests | 14 AIS tests | MPP-66 | #48 |
+| No Playwright fallback | REST-first facade | MPP-48 | #50 |
+| No master fixture | 10 clients, 25 factures | MPP-21 | #41 |
+| Gmail auth SA vs OAuth | OAuth2 user tokens | MPP-53 | #49 |
 
 ## Resume
 

@@ -89,6 +89,20 @@ GitHub Actions -- 3 jobs paralleles sur chaque PR/push vers `main` :
 | Test | pytest | `pytest --ignore=tests/integration` |
 | Typecheck | pyright | `pyright src/` |
 
+## Milestone P1 -- Bloquants + Fixtures
+
+16 stories completed -- [Linear project](https://linear.app/pmm-001/project/sap-facture)
+
+| Groupe | Stories | PRs |
+|--------|---------|-----|
+| Infra (CI, branching, merge) | MPP-37, 38, 39 | #37, #40, #43 |
+| Fixtures (master, CSV, sandbox) | MPP-21, 24, 26 | #41, #44, #46 |
+| Indy (reverse API, adapter, export) | MPP-64, 65, 51 | #39, #52 |
+| AIS (fallback, integration) | MPP-48, 66 | #50, #48 |
+| Quality (ghost tests, coverage) | MPP-56, 58 | #38, #42, #45 |
+| Mocks (Indy API, Gmail 2FA) | MPP-67, 25 | #51, #53 |
+| Fixes (Gmail auth) | MPP-53 | #49 |
+
 ## Documentation
 
 - **[CDC](docs/CDC.md)** -- Cahier des charges complet
