@@ -54,6 +54,17 @@ def create_test_spreadsheet(gc: Any) -> str:
     return str(spreadsheet.id)
 
 
+def delete_test_spreadsheet(gc: Any, spreadsheet_id: str) -> None:
+    """Delete a test spreadsheet by ID.
+
+    Args:
+        gc: Authenticated gspread client.
+        spreadsheet_id: ID of the spreadsheet to delete.
+    """
+    gc.del_spreadsheet(spreadsheet_id)
+    logger.info("Deleted spreadsheet: %s", spreadsheet_id)
+
+
 def main() -> None:
     """CLI entry point."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

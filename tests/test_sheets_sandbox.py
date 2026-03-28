@@ -131,6 +131,12 @@ class TestCreateTestSpreadsheet:
         create_test_spreadsheet(mock_gc)
         assert mock_gc.create.call_count == 2
 
+    def test_delete_calls_del_spreadsheet(self, mock_gc: MagicMock) -> None:
+        from tools.create_test_spreadsheet import delete_test_spreadsheet
+
+        delete_test_spreadsheet(mock_gc, "test-spreadsheet-id-123")
+        mock_gc.del_spreadsheet.assert_called_once_with("test-spreadsheet-id-123")
+
 
 # ──────────────────────────────────────────────
 # seed_test_data
