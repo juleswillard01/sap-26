@@ -134,6 +134,88 @@ class TestIndyAPIAdapterInit:
             IndyAPIAdapter(s)
 
 
+# ============================================================================
+# T3: connect() flow
+# ============================================================================
+
+
+class TestConnect:
+    """Test connect() orchestration logic."""
+
+    def test_connect_with_custom_token_sets_state(self, settings: Settings) -> None:
+        """connect(custom_token=...) skips nodriver and sets token state."""
+        from src.adapters.indy_api_adapter import IndyAPIAdapter
+
+        adapter = IndyAPIAdapter(settings)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "idToken": "my-jwt",
+            "refreshToken": "my-refresh",
+            "expiresIn": "3600",
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(adapter, "_client") as mock_client:
+            mock_client.post.return_value = mock_response
+            adapter.connect(custom_token="fake-custom-token")
+
+        assert adapter._id_token == "my-jwt"
+        assert adapter._refresh_token == "my-refresh"
+        assert adapter._token_expires_at > time.time()
+
+    def test_connect_without_token_calls_nodriver(self, settings: Settings) -> None:
+        """connect() without custom_token calls _login_with_nodriver."""
+        from src.adapters.indy_api_adapter import IndyAPIAdapter
+
+        adapter = IndyAPIAdapter(settings)
+
+        with (
+            patch.object(adapter, "_login_with_nodriver", return_value="nodriver-token") as mock_nd,
+            patch.object(
+                adapter,
+                "_exchange_custom_token",
+                return_value=("jwt", "refresh", 3600),
+            ),
+        ):
+            adapter.connect()
+
+        mock_nd.assert_called_once()
+        assert adapter._id_token == "jwt"
+
+    def test_connect_exchange_failure_propagates(self, settings: Settings) -> None:
+        """IndyAuthError from _exchange_custom_token propagates through connect()."""
+        from src.adapters.indy_api_adapter import IndyAPIAdapter
+
+        adapter = IndyAPIAdapter(settings)
+
+        with (
+            patch.object(
+                adapter,
+                "_exchange_custom_token",
+                side_effect=IndyAuthError("exchange failed"),
+            ),
+            pytest.raises(IndyAuthError, match="exchange failed"),
+        ):
+            adapter.connect(custom_token="bad-token")
+
+    def test_connect_nodriver_failure_propagates(self, settings: Settings) -> None:
+        """IndyLoginError from _login_with_nodriver propagates through connect()."""
+        from src.adapters.indy_api_adapter import IndyAPIAdapter
+
+        adapter = IndyAPIAdapter(settings)
+
+        with (
+            patch.object(
+                adapter,
+                "_login_with_nodriver",
+                side_effect=IndyLoginError("browser failed"),
+            ),
+            pytest.raises(IndyLoginError, match="browser failed"),
+        ):
+            adapter.connect()
+
+
 class TestIndyAPIAdapterConnectionError:
     """Test that methods raise IndyConnectionError when not connected."""
 
@@ -881,6 +963,50 @@ class TestApiPostError:
         with patch.object(connected_adapter, "_client") as mock_client:
             mock_client.post.return_value = mock_response
             with pytest.raises(IndyAPIError):
+                connected_adapter.get_accounting_summary()
+
+
+# ============================================================================
+# N1: _login_with_nodriver sync wrapper
+# ============================================================================
+
+
+class TestLoginWithNodriver:
+    """Test _login_with_nodriver sync wrapper."""
+
+    def test_calls_async_login(self, settings: Settings) -> None:
+        """_login_with_nodriver wraps _async_nodriver_login via asyncio.run."""
+        from src.adapters.indy_api_adapter import IndyAPIAdapter
+
+        adapter = IndyAPIAdapter(settings)
+
+        async def fake_async_login() -> str:
+            return "async-custom-token"
+
+        with patch.object(adapter, "_async_nodriver_login", side_effect=fake_async_login):
+            result = adapter._login_with_nodriver()
+
+        assert result == "async-custom-token"
+
+
+# ============================================================================
+# N2: _api_post network error paths
+# ============================================================================
+
+
+class TestApiPostNetworkErrors:
+    """Test _api_post timeout and connect error handling."""
+
+    def test_post_timeout_raises(self, connected_adapter: Any) -> None:
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.post.side_effect = httpx.TimeoutException("timeout")
+            with pytest.raises(IndyAPIError, match="timed out"):
+                connected_adapter.get_accounting_summary()
+
+    def test_post_connect_error_raises(self, connected_adapter: Any) -> None:
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.post.side_effect = httpx.ConnectError("refused")
+            with pytest.raises(IndyAPIError, match="Connection"):
                 connected_adapter.get_accounting_summary()
 
 

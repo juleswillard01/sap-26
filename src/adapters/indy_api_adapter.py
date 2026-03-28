@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from src.adapters.exceptions import IndyAPIError, IndyAuthError, IndyConnectionError
+from src.adapters.exceptions import (
+    IndyAPIError,
+    IndyAuthError,
+    IndyConnectionError,
+    IndyLoginError,
+)
 from src.models.transaction import Transaction
 
 if TYPE_CHECKING:
@@ -65,13 +70,202 @@ class IndyAPIAdapter:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def connect(self) -> None:
-        """Login via nodriver + Firebase token exchange.
+    def connect(self, *, custom_token: str | None = None) -> None:
+        """Login Indy et obtient un Bearer JWT Firebase.
 
-        Flow: nodriver (Turnstile+2FA) → customToken → Firebase JWT.
+        Args:
+            custom_token: Si fourni, skip nodriver et échange directement
+                le custom token contre un JWT. Utile pour les tests et
+                quand un token pré-obtenu est disponible.
+
+        Flow sans custom_token:
+            nodriver (Turnstile+2FA) → customToken → Firebase JWT.
+        Flow avec custom_token:
+            customToken → Firebase JWT (0 browser).
         """
-        msg = "connect() requires nodriver integration — see plan.md"
-        raise NotImplementedError(msg)
+        if custom_token is None:
+            custom_token = self._login_with_nodriver()
+
+        id_token, refresh_token, expires_in = self._exchange_custom_token(custom_token)
+        self._id_token = id_token
+        self._refresh_token = refresh_token
+        self._token_expires_at = time.time() + expires_in
+        logger.info("Indy connected (JWT TTL %ds)", expires_in)
+
+    def _login_with_nodriver(self) -> str:
+        """Login Indy via nodriver headless browser.
+
+        Sync wrapper autour de _async_nodriver_login().
+        Lance nodriver pour Turnstile bypass + 2FA Gmail → retourne customToken.
+
+        Returns:
+            Firebase custom token string.
+
+        Raises:
+            IndyLoginError: Si le login échoue (timeout, 2FA, Turnstile).
+        """
+        import asyncio
+
+        return asyncio.run(self._async_nodriver_login())
+
+    async def _async_nodriver_login(self) -> str:
+        """Login Indy via nodriver — implémentation async.
+
+        1. Navigate /connexion, fill email+password
+        2. Submit (nodriver bypass Turnstile)
+        3. Intercepte POST /api/auth/login via CDP
+        4. Si 401: 2FA → poll Gmail → re-submit avec code
+        5. Si 200: retourne customToken
+        """
+        import json as json_mod
+
+        import nodriver as uc  # type: ignore[import-untyped]
+
+        captured: dict[str, Any] = {}
+
+        def _on_response(event: Any) -> None:
+            url = getattr(getattr(event, "response", None), "url", "") or ""
+            if "/api/auth/login" in url:
+                captured["status"] = event.response.status
+                captured["request_id"] = event.request_id
+
+        browser = await uc.start(  # type: ignore[reportUnknownMemberType]
+            headless=True,
+            browser_args=["--no-first-run", "--no-default-browser-check"],
+        )
+        try:
+            page = await browser.get(f"{self._settings.indy_api_base_url}/connexion")
+            await page.sleep(3)
+
+            await page.send(uc.cdp.network.enable())
+            page.add_handler(  # type: ignore[reportUnknownMemberType]
+                uc.cdp.network.ResponseReceived, _on_response
+            )
+
+            await self._fill_login_form(page)
+            custom_token = await self._capture_login_response(page, captured, json_mod)
+
+            if custom_token:
+                logger.info("Indy nodriver login successful")
+                return custom_token
+
+            if captured.get("status") == 401:
+                custom_token = await self._handle_2fa_flow(page, captured, json_mod)
+                if custom_token:
+                    return custom_token
+
+            raise IndyLoginError(
+                f"Login failed (HTTP {captured.get('status', 'unknown')})",
+                http_status=captured.get("status"),
+            )
+        finally:
+            browser.stop()
+
+    async def _fill_login_form(self, page: Any) -> None:
+        """Remplit et soumet le formulaire de login Indy."""
+        email_input = await page.find("input[type='email']", timeout=10)
+        if email_input:
+            await email_input.send_keys(self._settings.indy_email)
+
+        password_input = await page.find("input[type='password']", timeout=10)
+        if password_input:
+            await password_input.send_keys(self._settings.indy_password)
+
+        await page.sleep(1)
+        submit_btn = await page.find("button[type='submit']", timeout=10)
+        if submit_btn:
+            await submit_btn.click()
+
+    async def _capture_login_response(
+        self,
+        page: Any,
+        captured: dict[str, Any],
+        json_mod: Any,
+    ) -> str | None:
+        """Attend et capture la réponse POST /api/auth/login."""
+        for _ in range(30):
+            await page.sleep(1)
+            if "request_id" in captured:
+                break
+
+        if "request_id" not in captured:
+            raise IndyLoginError("Login request not intercepted within 30s")
+
+        body_data = await page.send(
+            __import__("nodriver").cdp.network.get_response_body(captured["request_id"])
+        )
+        response_json = json_mod.loads(body_data[0])
+
+        if captured.get("status") == 200:
+            token = response_json.get("customToken")
+            if token:
+                return token
+            raise IndyLoginError("customToken missing from 200 response")
+
+        return None
+
+    async def _handle_2fa_flow(
+        self,
+        page: Any,
+        captured: dict[str, Any],
+        json_mod: Any,
+    ) -> str:
+        """Gère le flow 2FA: poll Gmail → inject code → re-submit."""
+        logger.info("2FA required — polling Gmail for verification code")
+        code = await self._poll_gmail_2fa_code()
+
+        captured.clear()
+        code_input = await page.find(
+            "input[placeholder*='code' i], input[name='code'], input[type='text']",
+            timeout=15,
+        )
+        if code_input:
+            await code_input.send_keys(code)
+
+        verify_btn = await page.find("button[type='submit']", timeout=10)
+        if verify_btn:
+            await verify_btn.click()
+
+        for _ in range(30):
+            await page.sleep(1)
+            if "request_id" in captured:
+                break
+
+        if "request_id" not in captured:
+            raise IndyLoginError("2FA login response not captured")
+
+        body_data = await page.send(
+            __import__("nodriver").cdp.network.get_response_body(captured["request_id"])
+        )
+        response_json = json_mod.loads(body_data[0])
+
+        if captured.get("status") != 200:
+            raise IndyLoginError(
+                f"2FA login failed (HTTP {captured.get('status')})",
+                http_status=captured.get("status"),
+            )
+
+        token = response_json.get("customToken")
+        if not token:
+            raise IndyLoginError("customToken missing after 2FA")
+
+        logger.info("Indy 2FA login successful")
+        return token
+
+    async def _poll_gmail_2fa_code(self) -> str:
+        """Poll Gmail IMAP pour le code 2FA Indy."""
+        from src.adapters.gmail_reader import GmailReader
+
+        reader = GmailReader(self._settings)
+        try:
+            reader.connect()
+            reader.flush_old_emails()
+            code = reader.get_latest_2fa_code(timeout_sec=60)
+            if not code:
+                raise IndyLoginError("2FA code not received from Gmail within 60s")
+            return code
+        finally:
+            reader.close()
 
     def close(self) -> None:
         """Ferme le client httpx et nettoie les tokens. Idempotent."""
