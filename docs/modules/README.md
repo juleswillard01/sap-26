@@ -1,14 +1,29 @@
 # Module Map — SAP-Facture
 
-Cartographie code ↔ tests ↔ documentation par module.
+Cartographie code, tests et documentation par module. Etat post-P1.
 
-| Module | Fichier | SPEC |
-|--------|---------|------|
-| [Sheets](sheets.md) | adapters/sheets_*.py, models/sheets.py | SPEC-001 |
-| [AIS](ais.md) | adapters/ais_adapter.py | SPEC-002 |
-| [Indy](indy.md) | adapters/indy_*.py, gmail_reader.py | SPEC-003 |
-| [Gmail](gmail.md) | adapters/gmail_reader.py | — |
-| [Reconciliation](reconciliation.md) | services/bank_reconciliation.py, lettrage_service.py | SPEC-004 |
-| [Notifications](notifications.md) | services/notification_service.py, adapters/email_*.py | SPEC-005 |
-| [NOVA](nova.md) | services/nova_reporting.py, cotisations_service.py | SPEC-006 |
-| [Core](core.md) | app.py, cli.py, config.py, models/ | — |
+## Adapters
+
+| Module | Stack | Tests | SPEC |
+|--------|-------|------:|------|
+| [AIS](ais.md) | REST httpx + Playwright fallback | 128 | SPEC-002 |
+| [Indy](indy.md) | REST httpx + nodriver login + 2FA | 132 | SPEC-003 |
+| [Sheets](sheets.md) | gspread + Polars | 124 | SPEC-001 |
+| [Gmail](gmail.md) | IMAP reader | 90 | -- |
+| [Notifications](notifications.md) | SMTP Gmail | 25 | SPEC-005 |
+
+## Services
+
+| Module | Description | Tests | SPEC |
+|--------|-------------|------:|------|
+| [Reconciliation](reconciliation.md) | Bank reconciliation + lettrage | 30 | SPEC-004 |
+| [NOVA](nova.md) | NOVA quarterly reporting | 40 | SPEC-006 |
+| [Core](core.md) | Payment tracker + state machine | 41 | -- |
+
+## Infrastructure
+
+| Aspect | Detail |
+|--------|--------|
+| CI | GitHub Actions, 3 jobs |
+| Tests | 1151 total, 86% coverage |
+| Fixtures | Master dataset (10 clients, 25 factures, 40 transactions) |
