@@ -640,3 +640,356 @@ class TestWriteChangesToSheets:
         assert called_updates[0]["statut"] == "EN_ATTENTE"
         assert called_updates[1]["facture_id"] == "FAC-002"
         assert called_updates[1]["statut"] == "VALIDE"
+
+    def test_write_empty_batch_is_noop(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Batch vide ne fait aucun appel Sheets."""
+        from src.services.payment_tracker import PaymentTracker
+
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        # Act
+        tracker.write_status_changes_batch([])
+
+        # Assert
+        mock_sheets_adapter.update_invoices_batch.assert_not_called()
+
+    def test_write_invalid_change_skipped(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Changement sans facture_id ou statut est ignoré."""
+        from src.services.payment_tracker import PaymentTracker
+
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        # Act
+        change = {"facture_id": "", "nouveau_statut": "EN_ATTENTE"}
+        tracker.write_status_change_to_sheets(change)
+
+        # Assert
+        mock_sheets_adapter.update_invoice.assert_not_called()
+
+
+# ============================================================================
+# Test Class: Standalone sync_statuses_from_ais function
+# ============================================================================
+
+
+class TestStandaloneSyncStatuses:
+    """Test de la fonction standalone sync_statuses_from_ais()."""
+
+    def test_detects_status_change(self) -> None:
+        """Détecte un changement CREE → EN_ATTENTE."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        ais = [{"facture_id": "F001", "statut_ais": "EN_ATTENTE", "urssaf_demande_id": "U1"}]
+        sheets = [{"facture_id": "F001", "statut": "CREE"}]
+
+        # Act
+        changes = sync_statuses_from_ais(ais, sheets)
+
+        # Assert
+        assert len(changes) == 1
+        assert changes[0]["facture_id"] == "F001"
+        assert changes[0]["ancien_statut"] == "CREE"
+        assert changes[0]["nouveau_statut"] == "EN_ATTENTE"
+
+    def test_empty_ais_returns_empty(self) -> None:
+        """Pas de statuts AIS → pas de changements."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        changes = sync_statuses_from_ais([], [{"facture_id": "F001", "statut": "CREE"}])
+
+        assert changes == []
+
+    def test_empty_sheets_returns_empty(self) -> None:
+        """Pas de factures Sheets → pas de changements."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        changes = sync_statuses_from_ais([{"facture_id": "F001", "statut_ais": "EN_ATTENTE"}], [])
+
+        assert changes == []
+
+    def test_no_change_same_status(self) -> None:
+        """Même statut AIS et Sheets → pas de changement."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        ais = [{"facture_id": "F001", "statut_ais": "CREE"}]
+        sheets = [{"facture_id": "F001", "statut": "CREE"}]
+
+        changes = sync_statuses_from_ais(ais, sheets)
+
+        assert changes == []
+
+    def test_unknown_facture_returns_na(self) -> None:
+        """Facture AIS inconnue dans Sheets → ancien_statut = N/A."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        ais = [{"facture_id": "F999", "statut_ais": "CREE", "urssaf_demande_id": "U1"}]
+        sheets = [{"facture_id": "F001", "statut": "CREE"}]
+
+        changes = sync_statuses_from_ais(ais, sheets)
+
+        assert len(changes) == 1
+        assert changes[0]["ancien_statut"] == "N/A"
+
+    def test_skips_empty_facture_id(self) -> None:
+        """Skip les entrées AIS sans facture_id."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        ais = [{"facture_id": "", "statut_ais": "CREE"}]
+        sheets = [{"facture_id": "F001", "statut": "CREE"}]
+
+        changes = sync_statuses_from_ais(ais, sheets)
+
+        assert changes == []
+
+    def test_skips_empty_status(self) -> None:
+        """Skip les entrées AIS sans statut_ais."""
+        from src.services.payment_tracker import sync_statuses_from_ais
+
+        ais = [{"facture_id": "F001", "statut_ais": ""}]
+        sheets = [{"facture_id": "F001", "statut": "CREE"}]
+
+        changes = sync_statuses_from_ais(ais, sheets)
+
+        assert changes == []
+
+
+# ============================================================================
+# Test Class: Standalone check_status_transition function
+# ============================================================================
+
+
+class TestStandaloneCheckStatusTransition:
+    """Test de la fonction standalone check_status_transition()."""
+
+    def test_valid_forward_transition(self) -> None:
+        """Transition valide BROUILLON → SOUMIS."""
+        from src.services.payment_tracker import check_status_transition
+
+        assert check_status_transition("BROUILLON", "SOUMIS") is True
+
+    def test_invalid_backward_transition(self) -> None:
+        """Transition invalide PAYE → CREE."""
+        from src.services.payment_tracker import check_status_transition
+
+        assert check_status_transition("PAYE", "CREE") is False
+
+    def test_terminal_state_blocks_all(self) -> None:
+        """État terminal RAPPROCHE bloque toute transition."""
+        from src.services.payment_tracker import check_status_transition
+
+        assert check_status_transition("RAPPROCHE", "BROUILLON") is False
+        assert check_status_transition("ANNULE", "BROUILLON") is False
+
+    def test_unknown_state_returns_false(self) -> None:
+        """État inconnu retourne False."""
+        from src.services.payment_tracker import check_status_transition
+
+        assert check_status_transition("INCONNU", "BROUILLON") is False
+
+    def test_all_valid_transitions(self) -> None:
+        """Toutes les transitions valides du SCHEMAS.html."""
+        from src.services.payment_tracker import check_status_transition
+
+        valid_pairs = [
+            ("BROUILLON", "SOUMIS"),
+            ("BROUILLON", "ANNULE"),
+            ("SOUMIS", "CREE"),
+            ("SOUMIS", "ERREUR"),
+            ("CREE", "EN_ATTENTE"),
+            ("EN_ATTENTE", "VALIDE"),
+            ("EN_ATTENTE", "EXPIRE"),
+            ("EN_ATTENTE", "REJETE"),
+            ("VALIDE", "PAYE"),
+            ("PAYE", "RAPPROCHE"),
+            ("ERREUR", "BROUILLON"),
+            ("EXPIRE", "BROUILLON"),
+            ("REJETE", "BROUILLON"),
+        ]
+
+        for old, new in valid_pairs:
+            assert check_status_transition(old, new) is True, f"{old} → {new} should be valid"
+
+
+# ============================================================================
+# Test Class: Standalone filter_critical_statuses function
+# ============================================================================
+
+
+class TestStandaloneFilterCriticalStatuses:
+    """Test de la fonction standalone filter_critical_statuses()."""
+
+    def test_filters_critical_statuses(self) -> None:
+        """Filtre ERREUR, EXPIRE, REJETE, EN_ATTENTE."""
+        from src.services.payment_tracker import filter_critical_statuses
+
+        changes = [
+            {"facture_id": "F001", "nouveau_statut": "ERREUR"},
+            {"facture_id": "F002", "nouveau_statut": "PAYE"},
+            {"facture_id": "F003", "nouveau_statut": "EXPIRE"},
+            {"facture_id": "F004", "nouveau_statut": "VALIDE"},
+            {"facture_id": "F005", "nouveau_statut": "REJETE"},
+            {"facture_id": "F006", "nouveau_statut": "EN_ATTENTE"},
+        ]
+
+        # Act
+        critical = filter_critical_statuses(changes)
+
+        # Assert
+        assert len(critical) == 4
+        critical_ids = {c["facture_id"] for c in critical}
+        assert critical_ids == {"F001", "F003", "F005", "F006"}
+
+    def test_empty_changes_returns_empty(self) -> None:
+        """Liste vide → résultat vide."""
+        from src.services.payment_tracker import filter_critical_statuses
+
+        assert filter_critical_statuses([]) == []
+
+    def test_no_critical_returns_empty(self) -> None:
+        """Que des statuts non-critiques → résultat vide."""
+        from src.services.payment_tracker import filter_critical_statuses
+
+        changes = [
+            {"facture_id": "F001", "nouveau_statut": "PAYE"},
+            {"facture_id": "F002", "nouveau_statut": "VALIDE"},
+        ]
+
+        assert filter_critical_statuses(changes) == []
+
+
+# ============================================================================
+# Test Class: PaymentTracker edge cases
+# ============================================================================
+
+
+class TestPaymentTrackerEdgeCases:
+    """Tests des cas limites du PaymentTracker."""
+
+    def test_sync_empty_ais_returns_empty(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """AIS retourne liste vide → pas de changements."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_ais_adapter.get_invoice_statuses.return_value = []
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        changes = tracker.sync_statuses_from_ais()
+
+        assert changes == []
+
+    def test_sync_skips_empty_facture_id(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Entrée AIS sans facture_id est ignorée."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_ais_adapter.get_invoice_statuses.return_value = [
+            {"facture_id": "", "statut_ais": "CREE"}
+        ]
+        mock_sheets_adapter.get_all_invoices.return_value = pl.DataFrame(
+            [{"facture_id": "F001", "statut": "CREE"}]
+        )
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        changes = tracker.sync_statuses_from_ais()
+
+        assert changes == []
+
+    def test_sync_skips_empty_status(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Entrée AIS sans statut_ais est ignorée."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_ais_adapter.get_invoice_statuses.return_value = [
+            {"facture_id": "F001", "statut_ais": ""}
+        ]
+        mock_sheets_adapter.get_all_invoices.return_value = pl.DataFrame(
+            [{"facture_id": "F001", "statut": "CREE"}]
+        )
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        changes = tracker.sync_statuses_from_ais()
+
+        assert changes == []
+
+    def test_detect_overdue_empty_df(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """DataFrame vide → pas d'overdue."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_sheets_adapter.get_all_invoices.return_value = pl.DataFrame()
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        overdue = tracker.detect_overdue_invoices()
+
+        assert overdue == []
+
+    def test_detect_overdue_no_date_skipped(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Facture EN_ATTENTE sans date_soumission est ignorée."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_sheets_adapter.get_all_invoices.return_value = pl.DataFrame(
+            [{"facture_id": "F001", "statut": "EN_ATTENTE", "date_soumission": ""}]
+        )
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        overdue = tracker.detect_overdue_invoices()
+
+        assert overdue == []
+
+    def test_detect_overdue_invalid_date_skipped(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Date invalide est ignorée sans crash."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_sheets_adapter.get_all_invoices.return_value = pl.DataFrame(
+            [{"facture_id": "F001", "statut": "EN_ATTENTE", "date_soumission": "not-a-date"}]
+        )
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        overdue = tracker.detect_overdue_invoices()
+
+        assert overdue == []
+
+    def test_detect_overdue_date_without_iso_separator_skipped(
+        self,
+        mock_ais_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Date sans 'T' (format date only) est ignorée."""
+        from src.services.payment_tracker import PaymentTracker
+
+        mock_sheets_adapter.get_all_invoices.return_value = pl.DataFrame(
+            [{"facture_id": "F001", "statut": "EN_ATTENTE", "date_soumission": "2026-03-20"}]
+        )
+        tracker = PaymentTracker(ais_adapter=mock_ais_adapter, sheets_adapter=mock_sheets_adapter)
+
+        overdue = tracker.detect_overdue_invoices()
+
+        assert overdue == []
