@@ -10,6 +10,22 @@
 | Skipped | 2 (Gmail API conditional) |
 | Coverage | 86% (gate: 80%) |
 
+## P1 Test Stories -- Linear x GitHub
+
+| Linear | Story | PR | Tests Added |
+|--------|-------|----|-------------|
+| MPP-56 | Fix ghost tests | #38, #42 | 31 reconciliation tests |
+| MPP-58 | PaymentTracker coverage | #45 | 24 tests (66->96%) |
+| MPP-21 | Fixture Master | #41 | 37 fixture validation |
+| MPP-24 | CSV Indy fixture | #44 | 22 CSV tests |
+| MPP-26 | Sheets sandbox | #46 | 16 sandbox tests |
+| MPP-66 | AIS integration | #48 | 14 integration tests |
+| MPP-48 | AIS Playwright fallback | #50 | 52 fallback tests |
+| MPP-65 | IndyAPIAdapter | #39 | 65 adapter tests |
+| MPP-67 | Mock Indy API | #51 | 9 mock tests |
+| MPP-25 | Mock Gmail 2FA | #53 | 9 mock tests |
+| MPP-39 | CI pipeline | #43 | CI validation |
+
 ## Test Breakdown by Module
 
 | Module | File(s) | Tests | Pass |

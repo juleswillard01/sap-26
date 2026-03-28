@@ -259,3 +259,26 @@ docs/
 - **Indy**: REST httpx + nodriver login (Firebase Auth JWT)
 - **Sheets**: gspread + Polars (cache 30s, rate limit 60 req/min)
 - All adapters read-only (write operations raise NotImplementedError)
+
+### Stories Traceability — Linear x GitHub
+
+All 16 P1 stories verified Done in Linear with completion comments linking to merged PRs.
+
+| Linear | GitHub PR | Merge Date | Verified |
+|--------|-----------|------------|----------|
+| MPP-56 | #38, #42 | 2026-03-28 | Yes |
+| MPP-58 | #45 | 2026-03-28 | Yes |
+| MPP-21 | #41 | 2026-03-28 | Yes |
+| MPP-24 | #44 | 2026-03-28 | Yes |
+| MPP-26 | #46 | 2026-03-28 | Yes |
+| MPP-64 | manual | 2026-03-26 | Yes |
+| MPP-65 | #39 | 2026-03-28 | Yes |
+| MPP-53 | #49 | 2026-03-28 | Yes |
+| MPP-51 | #52 | 2026-03-28 | Yes |
+| MPP-67 | #51 | 2026-03-28 | Yes |
+| MPP-25 | #53 | 2026-03-28 | Yes |
+| MPP-37 | #40 | 2026-03-28 | Yes |
+| MPP-38 | #37 | 2026-03-27 | Yes |
+| MPP-39 | #43 | 2026-03-28 | Yes |
+| MPP-48 | #50 | 2026-03-28 | Yes |
+| MPP-66 | #48 | 2026-03-28 | Yes |

@@ -4,15 +4,15 @@ Chaque spec = 1 branche = 1 issue = 1 PR vers main.
 
 ## Statut post-P1
 
-| ID | Module | Branche | Issue | Statut | Tests |
-|----|--------|---------|-------|--------|-------|
-| SPEC-001 | Sheets Adapter | `sheets-adapter` | [#1](https://github.com/juleswillard01/sap-26/issues/1) | DONE | gspread+Polars, 8 onglets, cache 30s, rate limiter, circuit breaker |
-| SPEC-002 | AIS Scraping | `ais-scraping` | [#2](https://github.com/juleswillard01/sap-26/issues/2) | DONE | REST httpx primary + Playwright fallback, 128 tests |
-| SPEC-003 | Indy Export | `indy-export` | [#3](https://github.com/juleswillard01/sap-26/issues/3) | DONE | REST httpx (Firebase Auth JWT), nodriver login+2FA, 132 tests |
-| SPEC-004 | Reconciliation | `reconciliation-engine` | [#4](https://github.com/juleswillard01/sap-26/issues/4) | DONE | Scoring algo, lettrage service, 30 tests |
-| SPEC-005 | Notifications | `notifications-email` | [#5](https://github.com/juleswillard01/sap-26/issues/5) | DONE | SMTP Gmail, Jinja2 templates, 25 tests |
-| SPEC-006 | NOVA Reporting | `nova-reporting` | [#6](https://github.com/juleswillard01/sap-26/issues/6) | DONE | Quarterly aggregation, 40 tests |
-| INDY_API_CONTRACTS | Indy REST API | — | — | DOCUMENTED | 14 endpoints, Firebase Auth |
+| ID | Module | Linear Stories | PRs | Statut | Tests |
+|----|--------|---------------|-----|--------|-------|
+| SPEC-001 | Sheets Adapter | MPP-26 | #46 | DONE | gspread+Polars, 8 onglets, cache 30s, rate limiter, circuit breaker |
+| SPEC-002 | AIS Scraping | MPP-48, MPP-66 | #50, #48 | DONE | REST httpx primary + Playwright fallback, 128 tests |
+| SPEC-003 | Indy Export | MPP-64, MPP-65, MPP-51 | #39, #52 | DONE | REST httpx (Firebase Auth JWT), nodriver login+2FA, 132 tests |
+| SPEC-004 | Reconciliation | MPP-56 | #38, #42 | DONE | Scoring algo, lettrage service, 30 tests |
+| SPEC-005 | Notifications | (pre-P1) | (pre-P1) | DONE | SMTP Gmail, Jinja2 templates, 25 tests |
+| SPEC-006 | NOVA Reporting | (pre-P1) | (pre-P1) | DONE | Quarterly aggregation, 40 tests |
+| INDY_API_CONTRACTS | Indy REST API | MPP-64 | manual | DOCUMENTED | 14 endpoints, Firebase Auth |
 
 **Total tests P1 : 355+**
 

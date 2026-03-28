@@ -223,6 +223,17 @@ Alias backward compat : `AISAdapter = AISAPIAdapter` (L426)
 - Les selectors AIS sont mappes dans `AISSelectors`: login form, clients page, demandes page.
 - Screenshots RGPD-safe sur erreur Playwright (pas de donnees personnelles dans les captures).
 
+## Traceability — Linear x GitHub
+
+| Story | Description | PR | Status |
+|-------|------------|-----|--------|
+| [MPP-48](https://linear.app/pmm-001/issue/MPP-48) | Playwright fallback selectors | [#50](https://github.com/juleswillard01/sap-26/pull/50) | Done |
+| [MPP-66](https://linear.app/pmm-001/issue/MPP-66) | Integration tests real AIS | [#48](https://github.com/juleswillard01/sap-26/pull/48) | Done |
+
+### Test Summary
+- Unit tests: 128 pass (20 respx + 52 fallback + 56 playwright mock)
+- Integration: 14 collected (skip in CI, marker `integration_ais`)
+
 ## Metriques
 
 | Metrique | Valeur |

@@ -240,3 +240,20 @@ Strategy 3 (REDUNDANT): Indy2FAAdapter (nodriver async)
 | Tests morts (test_gmail_api_reader.py) | ~518 lignes, 0 tests actifs |
 | Pre-existing failures | 4 |
 | Ratio tests/src | 1.85x |
+
+## Traceability — Linear × GitHub
+
+| Story | Description | PR | Status |
+|-------|------------|-----|--------|
+| [MPP-64](https://linear.app/pmm-001/issue/MPP-64) | Reverse API exploration | manual | Done |
+| [MPP-65](https://linear.app/pmm-001/issue/MPP-65) | IndyAPIAdapter REST httpx | [#39](https://github.com/juleswillard01/sap-26/pull/39) | Done |
+| [MPP-51](https://linear.app/pmm-001/issue/MPP-51) | Export CSV Journal Book | [#52](https://github.com/juleswillard01/sap-26/pull/52) | Done |
+| [MPP-67](https://linear.app/pmm-001/issue/MPP-67) | Mock Indy API FastAPI | [#51](https://github.com/juleswillard01/sap-26/pull/51) | Done |
+| [MPP-53](https://linear.app/pmm-001/issue/MPP-53) | Gmail auth SA→OAuth fix | [#49](https://github.com/juleswillard01/sap-26/pull/49) | Done |
+| [MPP-25](https://linear.app/pmm-001/issue/MPP-25) | Mock Gmail 2FA IMAP | [#53](https://github.com/juleswillard01/sap-26/pull/53) | Done |
+| [MPP-24](https://linear.app/pmm-001/issue/MPP-24) | CSV fixture Q1 2026 | [#44](https://github.com/juleswillard01/sap-26/pull/44) | Done |
+
+### Test Summary
+- Unit tests: 132 (65 API + 30 2FA + 37 auto login), 4 pre-existing failures
+- Mock server: 9 tests
+- CSV fixture: 22 tests
