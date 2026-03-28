@@ -15,6 +15,7 @@ from src.models.transaction import (
     LettrageStatus,
     compute_matching_score,
 )
+from src.services.bank_reconciliation import ReconciliationService
 
 # ============================================================================
 # FIXTURES
@@ -45,139 +46,6 @@ def sample_invoice_paye() -> Invoice:
         montant_unitaire=100.0,
         quantite=1.0,
     )
-
-
-@pytest.fixture
-def sample_transactions() -> list[dict[str, str]]:
-    """Transactions Indy brutes (avant import)."""
-    return [
-        {
-            "id": "TXN001",
-            "date": "2026-03-20",
-            "amount": "100.00",
-            "label": "Paiement URSSAF",
-            "type": "transfer",
-        },
-        {
-            "id": "TXN002",
-            "date": "2026-03-21",
-            "amount": "50.00",
-            "label": "Frais",
-            "type": "fee",
-        },
-    ]
-
-
-# ============================================================================
-# TEST CLASS: ImportTransactions
-# ============================================================================
-
-
-class TestImportTransactions:
-    """Tests pour l'import de transactions depuis Indy vers Sheets."""
-
-    def test_import_new_transactions(
-        self, mock_indy_adapter: MagicMock, mock_sheets_adapter: MagicMock
-    ) -> None:
-        """Doit importer les transactions nouvelles dans Sheets onglet Transactions."""
-        # ARRANGE
-        txn_data = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = txn_data
-        mock_sheets_adapter.get_all_transactions.return_value = []
-
-        # ACT
-        # transactions = import_transactions(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert len(transactions) == 1
-        # mock_sheets_adapter.add_transactions.assert_called_once()
-
-    def test_dedup_by_indy_ref(
-        self, mock_indy_adapter: MagicMock, mock_sheets_adapter: MagicMock
-    ) -> None:
-        """Doit dédupliquer les transactions par indy_id (ne pas importer doublons)."""
-        # ARRANGE
-        txn_data = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        existing = [
-            {
-                "indy_id": "TXN001",
-                "date_valeur": "2026-03-20",
-                "montant": 100.0,
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = txn_data
-        mock_sheets_adapter.get_all_transactions.return_value = existing
-
-        # ACT
-        # transactions = import_transactions(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert len(transactions) == 0  # Pas d'import, déjà existant
-
-    def test_empty_csv_no_import(
-        self, mock_indy_adapter: MagicMock, mock_sheets_adapter: MagicMock
-    ) -> None:
-        """Si Indy retourne CSV vide, ne pas importer."""
-        # ARRANGE
-        mock_indy_adapter.export_transactions.return_value = []
-        mock_sheets_adapter.get_all_transactions.return_value = []
-
-        # ACT
-        # transactions = import_transactions(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert len(transactions) == 0
-        # mock_sheets_adapter.add_transactions.assert_not_called()
-
-    def test_import_preserves_order(
-        self, mock_indy_adapter: MagicMock, mock_sheets_adapter: MagicMock
-    ) -> None:
-        """L'ordre des transactions doit être préservé (chronologique Indy)."""
-        # ARRANGE
-        txn_data = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-18",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            },
-            {
-                "id": "TXN002",
-                "date": "2026-03-19",
-                "amount": "50.00",
-                "label": "Frais",
-            },
-            {
-                "id": "TXN003",
-                "date": "2026-03-20",
-                "amount": "150.00",
-                "label": "Autre paiement",
-            },
-        ]
-        mock_indy_adapter.export_transactions.return_value = txn_data
-        mock_sheets_adapter.get_all_transactions.return_value = []
-
-        # ACT
-        # transactions = import_transactions(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert transactions[0]["id"] == "TXN001"
-        # assert transactions[1]["id"] == "TXN002"
-        # assert transactions[2]["id"] == "TXN003"
 
 
 # ============================================================================
@@ -405,233 +273,6 @@ class TestLettrageScoring:
 
 
 # ============================================================================
-# TEST CLASS: ReconcileWorkflow
-# ============================================================================
-
-
-class TestReconcileWorkflow:
-    """Tests du workflow complet de rapprochement bancaire."""
-
-    def test_full_reconcile_flow(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-        sample_invoice_paye: Invoice,
-    ) -> None:
-        """Workflow complet : Indy → import → lettrage → update Sheets."""
-        # ARRANGE
-        indy_txns = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = indy_txns
-        mock_sheets_adapter.get_all_transactions.return_value = []
-        mock_sheets_adapter.get_all_invoices.return_value = [sample_invoice_paye]
-        mock_sheets_adapter.get_all_lettrage.return_value = []
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert result.transactions_imported > 0
-        # assert result.lettrage_updated > 0
-        # mock_sheets_adapter.add_transactions.assert_called_once()
-        # mock_sheets_adapter._update_row.assert_called()
-
-    def test_paye_to_rapproche_on_match(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-        sample_invoice_paye: Invoice,
-    ) -> None:
-        """Facture PAYE avec match LETTRE_AUTO → transition à RAPPROCHE."""
-        # ARRANGE
-        indy_txns = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = indy_txns
-        mock_sheets_adapter.get_all_transactions.return_value = []
-        mock_sheets_adapter.get_all_invoices.return_value = [sample_invoice_paye]
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # updated_invoice = result.invoices_updated[0]
-        # assert updated_invoice.statut == InvoiceStatus.RAPPROCHE
-
-    def test_multiple_invoices_multiple_transactions(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-    ) -> None:
-        """Plusieurs factures PAYE vs plusieurs transactions."""
-        # ARRANGE
-        invoice1 = Invoice(
-            facture_id="F001",
-            client_id="C001",
-            statut=InvoiceStatus.PAYE,
-            montant_unitaire=100.0,
-            quantite=1.0,
-        )
-        invoice2 = Invoice(
-            facture_id="F002",
-            client_id="C002",
-            statut=InvoiceStatus.PAYE,
-            montant_unitaire=200.0,
-            quantite=1.0,
-        )
-
-        indy_txns = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            },
-            {
-                "id": "TXN002",
-                "date": "2026-03-21",
-                "amount": "200.00",
-                "label": "Paiement URSSAF 2",
-            },
-        ]
-        mock_indy_adapter.export_transactions.return_value = indy_txns
-        mock_sheets_adapter.get_all_transactions.return_value = []
-        mock_sheets_adapter.get_all_invoices.return_value = [invoice1, invoice2]
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert len(result.invoices_updated) == 2
-
-    def test_lettrage_one_transaction_per_invoice(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-        sample_invoice_paye: Invoice,
-    ) -> None:
-        """Une transaction ne peut matcher qu'UNE seule facture (meilleur score)."""
-        # ARRANGE
-        indy_txns = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = indy_txns
-        mock_sheets_adapter.get_all_transactions.return_value = []
-        mock_sheets_adapter.get_all_invoices.return_value = [sample_invoice_paye]
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # For each transaction, only one invoice can be matched
-
-    def test_skip_non_paye_invoices(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-    ) -> None:
-        """Ne traiter que factures en état PAYE pour le lettrage."""
-        # ARRANGE
-        invoice_brouillon = Invoice(
-            facture_id="F001",
-            client_id="C001",
-            statut=InvoiceStatus.BROUILLON,
-        )
-        invoice_paye = Invoice(
-            facture_id="F002",
-            client_id="C002",
-            statut=InvoiceStatus.PAYE,
-            montant_unitaire=100.0,
-            quantite=1.0,
-        )
-
-        indy_txns = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = indy_txns
-        mock_sheets_adapter.get_all_transactions.return_value = []
-        mock_sheets_adapter.get_all_invoices.return_value = [invoice_brouillon, invoice_paye]
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # Only invoice_paye should be processed
-
-    def test_empty_invoice_list_no_lettrage(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-    ) -> None:
-        """Si pas de factures PAYE, ne pas faire de lettrage."""
-        # ARRANGE
-        indy_txns = [
-            {
-                "id": "TXN001",
-                "date": "2026-03-20",
-                "amount": "100.00",
-                "label": "Paiement URSSAF",
-            }
-        ]
-        mock_indy_adapter.export_transactions.return_value = indy_txns
-        mock_sheets_adapter.get_all_transactions.return_value = []
-        mock_sheets_adapter.get_all_invoices.return_value = []
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert result.lettrage_updated == 0
-
-    def test_retries_on_adapter_failure(
-        self,
-        mock_indy_adapter: MagicMock,
-        mock_sheets_adapter: MagicMock,
-    ) -> None:
-        """Retry 3x si Indy ou Sheets échouent (tenacity)."""
-        # ARRANGE
-        mock_indy_adapter.export_transactions.side_effect = [
-            Exception("Timeout"),
-            Exception("Timeout"),
-            [
-                {
-                    "id": "TXN001",
-                    "date": "2026-03-20",
-                    "amount": "100.00",
-                    "label": "Paiement URSSAF",
-                }
-            ],
-        ]
-
-        # ACT
-        # result = reconcile_all(mock_indy_adapter, mock_sheets_adapter)
-
-        # ASSERT
-        # assert mock_indy_adapter.export_transactions.call_count == 3
-
-
-# ============================================================================
 # TEST CLASS: EdgeCases
 # ============================================================================
 
@@ -786,7 +427,6 @@ class TestReconciliationService:
     ) -> None:
         """Le service complet: import Indy → dedup → scoring → update Sheets."""
         # ARRANGE
-        from src.services.bank_reconciliation import ReconciliationService
 
         invoice_paye = Invoice(
             facture_id="F001",
@@ -827,7 +467,6 @@ class TestReconciliationService:
     ) -> None:
         """Seules les factures PAYE sont candidates au lettrage."""
         # ARRANGE
-        from src.services.bank_reconciliation import ReconciliationService
 
         invoice_brouillon = Invoice(
             facture_id="F001",
@@ -863,7 +502,6 @@ class TestReconciliationService:
     ) -> None:
         """Score >= 80 → update statut PAYE → RAPPROCHE dans Sheets."""
         # ARRANGE
-        from src.services.bank_reconciliation import ReconciliationService
 
         invoice_paye = Invoice(
             facture_id="F001",
@@ -903,7 +541,6 @@ class TestReconciliationService:
     ) -> None:
         """Les transactions déjà importées (même indy_ref) sont ignorées."""
         # ARRANGE
-        from src.services.bank_reconciliation import ReconciliationService
 
         existing_transaction = {
             "transaction_id": "TXN001",
@@ -944,7 +581,6 @@ class TestReconciliationService:
     ) -> None:
         """CSV vide → rien importé, pas de lettrage."""
         # ARRANGE
-        from src.services.bank_reconciliation import ReconciliationService
 
         mock_indy_adapter.export_journal_csv.return_value = []
         mock_sheets_adapter.get_all_transactions.return_value = []
@@ -967,7 +603,6 @@ class TestReconciliationService:
     ) -> None:
         """Retourne un résumé: nb importées, nb lettrées auto, nb à vérifier."""
         # ARRANGE
-        from src.services.bank_reconciliation import ReconciliationService
 
         invoice_paye = Invoice(
             facture_id="F001",
@@ -1001,3 +636,179 @@ class TestReconciliationService:
         assert "lettrage_updated" in result
         assert "auto_matched" in result
         assert "to_verify" in result
+
+    def test_import_preserves_chronological_order(
+        self,
+        mock_indy_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """L'ordre chronologique Indy est preservé dans add_transactions."""
+        # ARRANGE
+
+        indy_csv_data = [
+            {"id": "TXN001", "date": "2026-03-18", "amount": "100.00", "label": "A"},
+            {"id": "TXN002", "date": "2026-03-19", "amount": "50.00", "label": "B"},
+            {"id": "TXN003", "date": "2026-03-20", "amount": "150.00", "label": "C"},
+        ]
+
+        mock_indy_adapter.export_journal_csv.return_value = indy_csv_data
+        mock_sheets_adapter.get_all_transactions.return_value = []
+        mock_sheets_adapter.get_all_invoices.return_value = []
+
+        service = ReconciliationService(mock_indy_adapter, mock_sheets_adapter)
+
+        # ACT
+        result = service.reconcile()
+
+        # ASSERT
+        assert result["transactions_imported"] == 3
+        call_args = mock_sheets_adapter.add_transactions.call_args
+        assert call_args is not None
+        added_txns = call_args[0][0]
+        assert added_txns[0]["indy_id"] == "TXN001"
+        assert added_txns[1]["indy_id"] == "TXN002"
+        assert added_txns[2]["indy_id"] == "TXN003"
+
+    def test_paye_to_rapproche_exact_args(
+        self,
+        mock_indy_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+        sample_invoice_paye: Invoice,
+    ) -> None:
+        """update_invoice_status appele avec (facture_id, RAPPROCHE) exact."""
+        # ARRANGE
+
+        indy_csv_data = [
+            {
+                "id": "TXN001",
+                "date": "2026-03-20",
+                "amount": "100.00",
+                "label": "Paiement URSSAF",
+            }
+        ]
+
+        mock_indy_adapter.export_journal_csv.return_value = indy_csv_data
+        mock_sheets_adapter.get_all_transactions.return_value = []
+        mock_sheets_adapter.get_all_invoices.return_value = [sample_invoice_paye]
+
+        service = ReconciliationService(mock_indy_adapter, mock_sheets_adapter)
+
+        # ACT
+        service.reconcile()
+
+        # ASSERT
+        mock_sheets_adapter.update_invoice_status.assert_called_once_with(
+            "F001", InvoiceStatus.RAPPROCHE
+        )
+
+    def test_multiple_invoices_matched_to_multiple_transactions(
+        self,
+        mock_indy_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """2 factures PAYE + 2 transactions matchantes = 2 auto_matched."""
+        # ARRANGE
+
+        invoice1 = Invoice(
+            facture_id="F001",
+            client_id="C001",
+            statut=InvoiceStatus.PAYE,
+            montant_unitaire=100.0,
+            quantite=1.0,
+        )
+        invoice2 = Invoice(
+            facture_id="F002",
+            client_id="C002",
+            statut=InvoiceStatus.PAYE,
+            montant_unitaire=200.0,
+            quantite=1.0,
+        )
+
+        indy_csv_data = [
+            {
+                "id": "TXN001",
+                "date": "2026-03-20",
+                "amount": "100.00",
+                "label": "Paiement URSSAF",
+            },
+            {
+                "id": "TXN002",
+                "date": "2026-03-20",
+                "amount": "200.00",
+                "label": "Paiement URSSAF",
+            },
+        ]
+
+        mock_indy_adapter.export_journal_csv.return_value = indy_csv_data
+        mock_sheets_adapter.get_all_transactions.return_value = []
+        mock_sheets_adapter.get_all_invoices.return_value = [invoice1, invoice2]
+
+        service = ReconciliationService(mock_indy_adapter, mock_sheets_adapter)
+
+        # ACT
+        result = service.reconcile()
+
+        # ASSERT
+        assert result["auto_matched"] == 2
+        assert mock_sheets_adapter.update_invoice_status.call_count == 2
+
+    def test_one_transaction_matches_only_one_invoice(
+        self,
+        mock_indy_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """1 transaction + 2 factures meme montant = 1 seul match."""
+        # ARRANGE
+
+        invoice1 = Invoice(
+            facture_id="F001",
+            client_id="C001",
+            statut=InvoiceStatus.PAYE,
+            montant_unitaire=100.0,
+            quantite=1.0,
+        )
+        invoice2 = Invoice(
+            facture_id="F002",
+            client_id="C002",
+            statut=InvoiceStatus.PAYE,
+            montant_unitaire=100.0,
+            quantite=1.0,
+        )
+
+        indy_csv_data = [
+            {
+                "id": "TXN001",
+                "date": "2026-03-20",
+                "amount": "100.00",
+                "label": "Paiement URSSAF",
+            }
+        ]
+
+        mock_indy_adapter.export_journal_csv.return_value = indy_csv_data
+        mock_sheets_adapter.get_all_transactions.return_value = []
+        mock_sheets_adapter.get_all_invoices.return_value = [invoice1, invoice2]
+
+        service = ReconciliationService(mock_indy_adapter, mock_sheets_adapter)
+
+        # ACT
+        result = service.reconcile()
+
+        # ASSERT
+        assert result["auto_matched"] == 1, "1 txn ne doit matcher qu'1 facture"
+        assert mock_sheets_adapter.update_invoice_status.call_count == 1
+
+    def test_adapter_exception_propagates(
+        self,
+        mock_indy_adapter: MagicMock,
+        mock_sheets_adapter: MagicMock,
+    ) -> None:
+        """Exception Indy propagee par le service (pas de retry interne)."""
+        # ARRANGE
+
+        mock_indy_adapter.export_journal_csv.side_effect = RuntimeError("Timeout")
+
+        service = ReconciliationService(mock_indy_adapter, mock_sheets_adapter)
+
+        # ACT + ASSERT
+        with pytest.raises(RuntimeError, match="Timeout"):
+            service.reconcile()
