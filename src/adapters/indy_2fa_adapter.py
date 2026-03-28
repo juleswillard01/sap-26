@@ -488,26 +488,10 @@ class Indy2FAAdapter:
         while time.monotonic() - start < timeout_sec:
             url = page.url.lower()
 
-            # Check URL patterns
-            if any(pattern in url for pattern in dashboard_patterns):
-                logger.info("Dashboard URL detected: %s", url)
-
-                # Verify page actually loaded
-                try:
-                    # Look for key dashboard element
-                    dashboard_elem = await page.query_selector(
-                        "[data-testid='account-balance'], "
-                        ".account-balance, "
-                        "[class*='balance'], "
-                        "[class*='dashboard']",
-                        timeout=5000,
-                    )
-                    if dashboard_elem:
-                        logger.info("Dashboard element found, login successful")
-                        return True
-                except Exception:
-                    # Element not found yet, page might still be loading
-                    pass
+            # If URL left /connexion, we're logged in
+            if "/connexion" not in url and "/login" not in url:
+                logger.info("Login successful, URL: %s", url)
+                return True
 
             await page.sleep(1)
 

@@ -1,11 +1,10 @@
-"""Intercept Indy API calls via nodriver CDP Network domain.
+"""Intercept Indy API calls — auto-login + CDP Network capture.
 
-Captures all XHR/fetch API calls from Indy by enabling Chrome DevTools Protocol
-(CDP) Network domain events. Filters out static assets and logs API endpoints
-for reverse engineering.
+Reuses existing Indy2FAAdapter + GmailReader for automated login,
+captures all XHR/fetch API calls via CDP Network domain events.
 
 Usage:
-    python tools/intercept_indy_api.py
+    uv run python tools/indy_intercept.py
 
 Output:
     - io/research/indy/api-endpoints.md  (markdown summary)
@@ -18,20 +17,43 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import nodriver as uc
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+# Project imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.adapters.gmail_reader import GmailReader
+from src.adapters.indy_2fa_adapter import Indy2FAAdapter
+from src.config import Settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
 logger = logging.getLogger(__name__)
 
+console = Console()
+
 OUTPUT_DIR = Path("io/research/indy")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Static asset extensions and tracking domains to filter
-STATIC_EXTENSIONS = {".js", ".css", ".png", ".jpg", ".svg", ".woff", ".ttf", ".ico"}
+STATIC_EXTENSIONS = {
+    ".js",
+    ".css",
+    ".png",
+    ".jpg",
+    ".svg",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".ico",
+    ".gif",
+}
 TRACKING_DOMAINS = {
     "google-analytics",
     "googletagmanager",
@@ -40,68 +62,94 @@ TRACKING_DOMAINS = {
     "sentry",
     "amplitude",
     "segment",
+    "hotjar",
 }
+
+PAGES_TO_EXPLORE = [
+    ("/pilotage", "Pilotage"),
+    ("/transactions", "Transactions"),
+    ("/comptabilite", "Comptabilite"),
+    ("/documents", "Documents"),
+    ("/comptes-pro", "Comptes-Pro"),
+]
 
 
 class NetworkInterceptor:
-    """Capture API calls via CDP Network events."""
+    """Capture API calls via CDP Network events with Rich live display."""
 
     def __init__(self) -> None:
         self.requests: dict[str, dict[str, Any]] = {}
         self.api_calls: list[dict[str, Any]] = []
-        self.request_count = 0
-        self.filtered_count = 0
+        self.auth_tokens: dict[str, Any] = {}
+        self.request_count: int = 0
+        self.filtered_count: int = 0
 
-    def _is_static_asset(self, url: str) -> bool:
-        """Check if URL is a static asset to ignore."""
+    def _capture_auth(self, headers: dict[str, str], url: str) -> None:
+        """Extract auth-related headers and persist to disk immediately."""
+        auth_keys = {"authorization", "cookie", "x-api-key", "x-csrf-token", "x-access-token"}
+        found: dict[str, str] = {}
+        for key, value in headers.items():
+            if key.lower() in auth_keys:
+                found[key] = value
+
+        if not found:
+            return
+
+        # Update with latest tokens (overwrite per key)
+        for key, value in found.items():
+            self.auth_tokens[key] = {
+                "value": value,
+                "url": url,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        # Write immediately — gitignored, sensitive
+        auth_file = OUTPUT_DIR / "api-auth.json"
+        auth_file.write_text(json.dumps(self.auth_tokens, indent=2, default=str))
+        console.print(f"  [bold yellow]AUTH captured: {', '.join(found.keys())}[/bold yellow]")
+
+    def _is_noise(self, url: str) -> bool:
+        """Check if URL is a static asset or tracking pixel."""
         url_lower = url.lower()
         return any(ext in url_lower for ext in STATIC_EXTENSIONS) or any(
             domain in url_lower for domain in TRACKING_DOMAINS
         )
 
-    def on_request_will_be_sent(self, event: uc.cdp.network.RequestWillBeSent) -> None:
-        """Handle CDP Network.requestWillBeSent event.
-
-        Args:
-            event: CDP RequestWillBeSent event containing request details.
-        """
+    def on_request(self, event: uc.cdp.network.RequestWillBeSent) -> None:
+        """CDP Network.requestWillBeSent handler."""
         request = event.request
         url = request.url
-        request_id = event.request_id
-
         self.request_count += 1
 
-        # Filter out static assets and trackers
-        if self._is_static_asset(url):
+        if self._is_noise(url):
             self.filtered_count += 1
             return
 
-        # Only track XHR/fetch requests (based on resource type)
-        request_type = (event.type or "OTHER").upper()
-        if request_type not in {"XHR", "FETCH"}:
-            return
+        # Extract resource type — CDP enum .value gives the raw string
+        raw_type = getattr(event, "type_", None) or getattr(event, "type", None)
+        resource_type = getattr(raw_type, "value", str(raw_type or "OTHER")).upper()
 
-        # Extract headers safely (may be None)
         headers = request.headers or {}
 
-        self.requests[request_id] = {
+        # Extract auth tokens/cookies (raw, for api-auth.json)
+        raw_headers = {str(k): str(v) for k, v in headers.items()} if headers else {}
+        self._capture_auth(raw_headers, url)
+
+        self.requests[str(event.request_id)] = {
             "url": url,
             "method": request.method or "GET",
-            "headers": self._mask_headers(headers),
+            "headers": _mask_headers(headers),
+            "headers_raw": raw_headers,
             "post_data": request.post_data or "",
-            "type": request_type,
+            "type": resource_type,
             "timestamp": datetime.now().isoformat(),
         }
 
-        logger.debug("Request captured: %s %s", request.method, url)
+        console.print(f"  [dim cyan]-> {request.method} {url[:120]}[/dim cyan]")
 
-    def on_response_received(self, event: uc.cdp.network.ResponseReceived) -> None:
-        """Handle CDP Network.responseReceived event.
-
-        Args:
-            event: CDP ResponseReceived event containing response details.
-        """
-        request_id = event.request_id
+    def on_response(self, event: uc.cdp.network.ResponseReceived) -> None:
+        """CDP Network.responseReceived handler."""
+        request_id = str(event.request_id)
         if request_id not in self.requests:
             return
 
@@ -109,87 +157,55 @@ class NetworkInterceptor:
         entry = self.requests[request_id]
         entry["status"] = response.status
         entry["status_text"] = response.status_text or ""
-        entry["content_type"] = (response.headers or {}).get("content-type", "")
+        entry["content_type"] = str((response.headers or {}).get("content-type", ""))
         entry["url"] = response.url or entry["url"]
 
-        # Keep entry (will be filtered by content-type later if needed)
         self.api_calls.append(entry)
-        logger.debug("Response: %s %d", entry["url"], entry["status"])
 
-    @staticmethod
-    def _mask_headers(headers: dict[str, str | int | float | bool] | None) -> dict[str, str]:
-        """Mask sensitive headers for security.
+        status_style = "green" if 200 <= response.status < 300 else "red"
+        console.print(
+            f"  [dim]<- [{status_style}]{response.status}[/{status_style}] "
+            f"{entry['method']} {entry['url'][:100]}[/dim]"
+        )
 
-        Args:
-            headers: Dictionary of HTTP headers to filter.
-
-        Returns:
-            Dictionary of headers with sensitive values masked.
-        """
-        if not headers:
-            return {}
-
-        masked = {}
-        sensitive_keys = {"authorization", "cookie", "token", "secret", "x-api-key"}
-
-        for key, value in headers.items():
-            key_lower = key.lower()
-            if any(s in key_lower for s in sensitive_keys):
-                val_str = str(value)
-                if len(val_str) > 30:
-                    masked[key] = val_str[:30] + "..."
-                else:
-                    masked[key] = "***"
-            else:
-                masked[key] = str(value)
-
-        return masked
+        # Write to disk after every response — no data loss on kill
+        (OUTPUT_DIR / "api-raw.json").write_text(self.export_json())
+        (OUTPUT_DIR / "api-endpoints.md").write_text(self.export_markdown())
 
     def export_markdown(self) -> str:
         """Export API calls as markdown summary."""
         lines = [
-            "# Indy API Endpoints — Reverse Engineering\n",
+            "# Indy API Endpoints -- Reverse Engineering\n",
             f"Generated: {datetime.now().isoformat()}",
             f"Total requests: {self.request_count}",
             f"Static/tracking filtered: {self.filtered_count}",
             f"API calls captured: {len(self.api_calls)}\n",
-            "## API Endpoints Summary\n",
+            "## Endpoints Summary\n",
             "| Method | URL | Status | Content-Type |",
             "|---|---|---|---|",
         ]
 
-        seen_endpoints = set()
+        seen: set[str] = set()
         for call in self.api_calls:
-            # Normalize URL (remove query params for dedup)
-            url_normalized = call["url"].split("?")[0]
-            endpoint_key = f"{call['method']} {url_normalized}"
-
-            if endpoint_key in seen_endpoints:
+            base_url = call["url"].split("?")[0]
+            key = f"{call['method']} {base_url}"
+            if key in seen:
                 continue
-            seen_endpoints.add(endpoint_key)
-
-            method = call.get("method", "?")
-            url = url_normalized[:80]
-            status = call.get("status", "?")
-            content_type = call.get("content_type", "?").split(";")[0]
-
-            lines.append(f"| {method} | {url} | {status} | {content_type} |")
+            seen.add(key)
+            ct = call.get("content_type", "?").split(";")[0]
+            lines.append(
+                f"| {call['method']} | {base_url[:80]} | {call.get('status', '?')} | {ct} |"
+            )
 
         lines.append(f"\n## Detailed Calls ({len(self.api_calls)} total)\n")
-
         for i, call in enumerate(self.api_calls, 1):
-            lines.append(f"### Call {i}: {call['method']} {call['url'][:100]}")
+            lines.append(f"### {i}. {call['method']} {call['url'][:100]}")
             lines.append(f"- **Status**: {call.get('status', '?')} {call.get('status_text', '')}")
             lines.append(f"- **Content-Type**: {call.get('content_type', '?')}")
             lines.append(f"- **Timestamp**: {call.get('timestamp', '?')}")
-
             if call.get("post_data"):
-                body = call["post_data"]
-                if isinstance(body, str) and len(body) > 500:
-                    lines.append(f"- **Body**: ```{body[:500]}...```")
-                else:
-                    lines.append(f"- **Body**: ```{body}```")
-
+                body = str(call["post_data"])[:500]
+                lines.append(f"- **Body**: ```{body}```")
             lines.append("")
 
         return "\n".join(lines)
@@ -198,189 +214,230 @@ class NetworkInterceptor:
         """Export API calls as JSON."""
         return json.dumps(self.api_calls, indent=2, default=str)
 
+    def print_summary(self) -> None:
+        """Print Rich table of discovered endpoints."""
+        table = Table(title="Indy API Endpoints Discovered", show_lines=True)
+        table.add_column("Method", style="bold cyan")
+        table.add_column("URL", style="white", max_width=80)
+        table.add_column("Status", justify="center")
+        table.add_column("Type", style="dim")
+
+        seen: set[str] = set()
+        for call in self.api_calls:
+            base_url = call["url"].split("?")[0]
+            key = f"{call['method']} {base_url}"
+            if key in seen:
+                continue
+            seen.add(key)
+
+            status = str(call.get("status", "?"))
+            status_style = "green" if status.startswith("2") else "red"
+            table.add_row(
+                call["method"],
+                base_url[:80],
+                f"[{status_style}]{status}[/{status_style}]",
+                call.get("type", "?"),
+            )
+
+        console.print(table)
+
+
+def _mask_headers(headers: dict[str, Any] | None) -> dict[str, str]:
+    """Mask sensitive header values (RGPD)."""
+    if not headers:
+        return {}
+
+    masked: dict[str, str] = {}
+    sensitive = {"authorization", "cookie", "token", "secret", "x-api-key"}
+
+    for key, value in headers.items():
+        if any(s in key.lower() for s in sensitive):
+            val_str = str(value)
+            masked[key] = val_str[:30] + "..." if len(val_str) > 30 else "***"
+        else:
+            masked[key] = str(value)
+
+    return masked
+
 
 async def main() -> None:
-    """Main execution: login to Indy and capture network traffic."""
-    # Read credentials from .env.mcp
-    env: dict[str, str] = {}
-    env_file = Path(".env.mcp")
-    if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            if "=" in line and not line.startswith("#"):
-                key, _, value = line.partition("=")
-                env[key.strip()] = value.strip()
-    else:
-        logger.warning(".env.mcp not found, will attempt to proceed")
+    """Auto-login Indy + CDP network interception + page exploration."""
+    console.print(
+        Panel(
+            "[bold]Indy Network Interceptor[/bold]\nAuto-login (2FA Gmail) + CDP capture",
+            style="blue",
+        )
+    )
 
-    email = env.get("INDY_EMAIL", "")
-    password = env.get("INDY_PASSWORD", "")
-
-    if not email or not password:
-        logger.error("INDY_EMAIL and INDY_PASSWORD required in .env.mcp")
-        logger.error("Exiting without intercepting.")
+    # --- Step 1: Settings ---
+    console.print("\n[bold cyan]1/5[/bold cyan] Loading settings from .env...")
+    try:
+        settings = Settings()
+    except Exception as e:
+        console.print(f"[red]Settings load failed: {e}[/red]")
         return
 
-    logger.info("Starting nodriver browser (headed mode)...")
+    missing: list[str] = []
+    if not settings.indy_email or not settings.indy_password:
+        missing.extend(["INDY_EMAIL", "INDY_PASSWORD"])
+    if not settings.gmail_imap_user or not settings.gmail_imap_password:
+        missing.extend(["GMAIL_IMAP_USER", "GMAIL_IMAP_PASSWORD"])
+    if missing:
+        console.print(f"[red]Missing in .env: {', '.join(missing)}[/red]")
+        return
+
+    console.print("[green]  Settings OK[/green]")
+
+    # --- Step 2: Gmail IMAP for 2FA ---
+    console.print("\n[bold cyan]2/5[/bold cyan] Connecting Gmail IMAP (2FA codes)...")
+    gmail_reader = GmailReader(settings)
+    try:
+        gmail_reader.connect()
+    except Exception as e:
+        console.print(f"[red]Gmail connection failed: {e}[/red]")
+        return
+    console.print("[green]  Gmail IMAP connected[/green]")
+
+    # --- Step 3: Browser + CDP ---
+    console.print("\n[bold cyan]3/5[/bold cyan] Launching browser (headed)...")
     browser = await uc.start(
         headless=False,
-        browser_args=[
-            "--no-first-run",
-            "--no-default-browser-check",
-        ],
+        browser_args=["--no-first-run", "--no-default-browser-check"],
     )
 
     interceptor = NetworkInterceptor()
 
     try:
-        logger.info("Navigating to app.indy.fr/connexion...")
         page = await browser.get("https://app.indy.fr/connexion")
         await page.sleep(3)
 
-        # Save initial login page
-        await page.save_screenshot(str(OUTPUT_DIR / "01-login-page.png"))
-        logger.info("Screenshot saved: 01-login-page.png")
-
-        # Enable CDP Network domain to intercept requests
-        logger.info("Enabling CDP Network interception...")
+        # Enable CDP BEFORE login to capture auth endpoints too
+        console.print("  Enabling CDP Network capture...")
         try:
-            # Enable CDP Network domain to capture all XHR/fetch requests
             await page.send(
                 uc.cdp.network.enable(
-                    max_total_buffer_size=100 * 1024 * 1024,  # 100MB buffer
-                    max_resource_buffer_size=10 * 1024 * 1024,  # 10MB per resource
-                    max_post_data_size=1024 * 1024,  # 1MB post data
-                    report_direct_socket_traffic=False,
-                    enable_durable_messages=True,
+                    max_total_buffer_size=100 * 1024 * 1024,
+                    max_resource_buffer_size=10 * 1024 * 1024,
+                    max_post_data_size=1024 * 1024,
                 )
             )
-            logger.info("CDP Network domain enabled for traffic capture")
-
-            # Register handlers for request/response events
-            page.add_handler(
-                uc.cdp.network.RequestWillBeSent,
-                interceptor.on_request_will_be_sent,
-            )
-            page.add_handler(
-                uc.cdp.network.ResponseReceived,
-                interceptor.on_response_received,
-            )
-            logger.info("Network event handlers registered (RequestWillBeSent, ResponseReceived)")
-
+            page.add_handler(uc.cdp.network.RequestWillBeSent, interceptor.on_request)
+            page.add_handler(uc.cdp.network.ResponseReceived, interceptor.on_response)
+            console.print("[green]  CDP Network enabled[/green]")
         except Exception as e:
-            logger.warning("CDP Network enable failed (non-critical): %s", e)
+            console.print(f"[yellow]  CDP enable warning: {e}[/yellow]")
 
-        # Fill login form
-        logger.info("Filling login form...")
-        email_input = await page.find("input[type='email']", timeout=10)
-        if email_input:
-            await email_input.send_keys(email)
-            logger.info("Email filled")
+        await page.save_screenshot(str(OUTPUT_DIR / "01-login-page.png"))
 
-        password_input = await page.find("input[type='password']", timeout=10)
-        if password_input:
-            await password_input.send_keys(password)
-            logger.info("Password filled")
+        # --- Step 3b: Flush stale 2FA emails BEFORE triggering login ---
+        console.print("  Flushing old Indy 2FA emails...")
+        flushed = gmail_reader.flush_old_emails(sender_filter="support@indy.fr")
+        console.print(f"  [green]{flushed} stale emails marked as read[/green]")
 
-        await page.sleep(2)
-        await page.save_screenshot(str(OUTPUT_DIR / "02-filled.png"))
+        # --- Step 4: Auto-login ---
+        console.print("\n[bold cyan]4/5[/bold cyan] Auto-login Indy (2FA via Gmail IMAP)...")
+        adapter_2fa = Indy2FAAdapter()
+        login_ok = await adapter_2fa.auto_2fa_login(
+            page=page,
+            gmail_reader=gmail_reader,
+            email=settings.indy_email,
+            password=settings.indy_password,
+            timeout_sec=120,
+        )
 
-        # Submit login
-        logger.info("Submitting login...")
-        try:
-            submit_btn = await page.find("Se connecter", timeout=10)
-            if submit_btn:
-                await submit_btn.click()
-                logger.info("Login submitted")
-        except Exception as e:
-            logger.warning("Could not find submit by text, trying selector: %s", e)
-            try:
-                submit_btn = await page.query_selector("button[type='submit']")
-                if submit_btn:
-                    await submit_btn.click()
-                    logger.info("Login submitted (via selector)")
-            except Exception as ex:
-                logger.error("Could not submit: %s", ex)
-
-        # Wait for login to complete
-        logger.info("Waiting for login response (max 120s)...")
-        logged_in = False
-        for _attempt in range(24):
-            await page.sleep(5)
-            current_url = page.url
-            logger.info("URL: %s", current_url)
-
-            if any(x in current_url.lower() for x in ["dashboard", "accueil", "app.indy.fr/app"]):
-                logged_in = True
-                logger.info("Login successful!")
-                break
-
-            if "verification" in current_url.lower() or "2fa" in current_url.lower():
-                logger.info("2FA detected. Enter code in browser window...")
-                logger.info("Waiting for 2FA completion (max 120s)...")
-                # Wait for 2FA
-                for _i in range(24):
-                    await page.sleep(5)
-                    url = page.url
-                    if any(x in url.lower() for x in ["dashboard", "accueil", "app.indy.fr/app"]):
-                        logged_in = True
-                        logger.info("2FA completed!")
-                        break
-                break
-
-        await page.save_screenshot(str(OUTPUT_DIR / "03-after-login.png"))
-
-        if not logged_in:
-            logger.error("Login failed or timed out")
-            logger.error("Final URL: %s", page.url)
+        if not login_ok:
+            console.print("[red]  Login FAILED[/red]")
+            await page.save_screenshot(str(OUTPUT_DIR / "02-login-failed.png"))
             return
 
-        # Now navigate through key pages to trigger API calls
-        logger.info("Exploring Indy pages to capture API calls...")
+        console.print("[green]  Login OK[/green]")
+        await page.sleep(5)
 
-        pages_to_explore = [
-            ("/app/", "Dashboard"),
-            ("/app/transactions", "Transactions"),
-            ("/app/documents", "Documents"),
-            ("/app/comptabilite", "Comptabilité"),
-            ("/app/bank", "Bank/Accounts"),
-        ]
+        # Extract Firebase refresh token from browser storage
+        console.print("  Extracting Firebase tokens...")
+        try:
+            firebase_tokens = await page.evaluate("""
+                (async () => {
+                    // Firebase stores tokens in IndexedDB: firebaseLocalStorageDb
+                    const dbs = await indexedDB.databases();
+                    const fbDb = dbs.find(db => db.name && db.name.includes('firebase'));
+                    if (!fbDb) return {error: 'no firebase db found', dbs: dbs.map(d => d.name)};
 
-        for i, (path, name) in enumerate(pages_to_explore, start=1):
-            try:
-                full_url = f"https://app.indy.fr{path}"
-                logger.info("Navigating to %s (%s)...", name, full_url)
-                await page.get(full_url)
-                await page.sleep(4)  # Wait for API calls to complete
-                await page.save_screenshot(str(OUTPUT_DIR / f"0{i + 3}-{name.lower()}.png"))
-                logger.info("Screenshot saved: 0%d-%s.png", i + 3, name.lower())
-            except Exception as e:
-                logger.warning("Could not navigate to %s: %s", name, e)
+                    return new Promise((resolve, reject) => {
+                        const req = indexedDB.open(fbDb.name);
+                        req.onsuccess = (event) => {
+                            const db = event.target.result;
+                            const stores = Array.from(db.objectStoreNames);
+                            const store = stores.find(s => s.includes('firebaseLocalStorage')) || stores[0];
+                            if (!store) { resolve({error: 'no store found', stores}); return; }
 
-        # Export results
-        logger.info("Exporting captured data...")
-        md_content = interceptor.export_markdown()
-        md_file = OUTPUT_DIR / "api-endpoints.md"
-        md_file.write_text(md_content)
-        logger.info("Markdown export saved: %s", md_file)
+                            const tx = db.transaction(store, 'readonly');
+                            const os = tx.objectStore(store);
+                            const getAll = os.getAll();
+                            getAll.onsuccess = () => {
+                                const items = getAll.result;
+                                const tokens = {};
+                                for (const item of items) {
+                                    const val = item.value || item;
+                                    if (val.spiTokenKey || val.refreshToken || val.accessToken) {
+                                        tokens.refreshToken = val.spiTokenKey?.refreshToken || val.refreshToken;
+                                        tokens.accessToken = val.spiTokenKey?.accessToken || val.accessToken;
+                                        tokens.expirationTime = val.spiTokenKey?.expirationTime || val.expirationTime;
+                                    }
+                                }
+                                resolve({items: items.length, tokens, raw: items});
+                            };
+                            getAll.onerror = () => resolve({error: 'getAll failed'});
+                        };
+                        req.onerror = () => resolve({error: 'open failed'});
+                    });
+                })()
+            """)
+            auth_file = OUTPUT_DIR / "api-auth.json"
+            existing = json.loads(auth_file.read_text()) if auth_file.exists() else {}
+            existing["firebase_storage"] = firebase_tokens
+            auth_file.write_text(json.dumps(existing, indent=2, default=str))
+            console.print("  [bold yellow]Firebase tokens saved to api-auth.json[/bold yellow]")
+        except Exception as e:
+            console.print(f"  [dim red]Firebase token extraction failed: {e}[/dim red]")
 
-        json_content = interceptor.export_json()
-        json_file = OUTPUT_DIR / "api-raw.json"
-        json_file.write_text(json_content)
-        logger.info("JSON export saved: %s", json_file)
+        # Dismiss popup "Alerte au faux conseiller" if present
+        try:
+            dismiss_btn = await page.find("J'ai compris", timeout=5)
+            if dismiss_btn:
+                await dismiss_btn.click()
+                console.print("  [dim]Popup dismissed[/dim]")
+                await page.sleep(1)
+        except Exception:
+            pass
 
-        logger.info("Keeping browser open for 30 more seconds...")
-        await page.sleep(30)
+        await page.save_screenshot(str(OUTPUT_DIR / "02-logged-in.png"))
+
+        # --- Step 5: Free navigation — user controls the browser ---
+        console.print(
+            Panel(
+                "[bold]Navigate librement dans Indy.[/bold]\n"
+                "Le trafic API est capturé en temps réel.\n"
+                "[yellow]Ctrl+C[/yellow] pour arrêter et exporter.",
+                style="green",
+            )
+        )
+
+        # Keep running until user interrupts
+        while True:
+            await page.sleep(5)
 
     except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        console.print("\n[yellow]Interrupted by user[/yellow]")
     except Exception as e:
-        logger.error("Error during exploration: %s", e, exc_info=True)
+        console.print(f"\n[red]Error: {e}[/red]")
+        logger.error("Interception failed", exc_info=True)
     finally:
-        # Final export
-        md_content = interceptor.export_markdown()
-        (OUTPUT_DIR / "api-endpoints.md").write_text(md_content)
-        logger.info("Final export: %d API calls captured", len(interceptor.api_calls))
-        logger.info("Closing browser...")
+        # Always export what we captured
+        (OUTPUT_DIR / "api-endpoints.md").write_text(interceptor.export_markdown())
+        (OUTPUT_DIR / "api-raw.json").write_text(interceptor.export_json())
+        console.print(f"\n[dim]Final export: {len(interceptor.api_calls)} API calls[/dim]")
+        gmail_reader.close()
         browser.stop()
 
 

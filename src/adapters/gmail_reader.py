@@ -39,6 +39,48 @@ class GmailReader:
     IMAP_HOST = "imap.gmail.com"
     IMAP_PORT = 993
 
+    def flush_old_emails(self, sender_filter: str = "indy") -> int:
+        """Mark all unseen emails from sender as SEEN to avoid stale codes.
+
+        Must be called BEFORE triggering a new 2FA to ensure only the
+        fresh code gets picked up.
+
+        Args:
+            sender_filter: Only flush emails with this string in From header.
+
+        Returns:
+            Number of emails marked as read.
+        """
+        if not self._connection:
+            self.connect()
+
+        flushed = 0
+        try:
+            if self._connection:
+                self._connection.select("INBOX")
+                status, messages = self._connection.search(None, "UNSEEN")
+                if status != "OK" or not messages[0]:
+                    return 0
+
+                for msg_id in messages[0].split():
+                    status, msg_data = self._connection.fetch(msg_id, "(RFC822)")
+                    if status != "OK":
+                        continue
+
+                    raw_email: Any = msg_data[0][1]  # type: ignore[index]
+                    msg = email.message_from_bytes(raw_email)  # type: ignore[arg-type]
+
+                    sender = str(msg.get("From", "")).lower()
+                    if sender_filter.lower() in sender:
+                        self._connection.store(msg_id, "+FLAGS", "\\Seen")
+                        flushed += 1
+
+                logger.info("Flushed %d old emails from '%s'", flushed, sender_filter)
+        except Exception as e:
+            logger.error("Error flushing old emails: %s", e)
+
+        return flushed
+
     def __init__(self, settings: Settings) -> None:
         """Initialize GmailReader with Gmail credentials.
 

@@ -73,3 +73,37 @@ class CircuitOpenError(SheetsError):
         sheet_name: str | None = None,
     ) -> None:
         super().__init__(message, sheet_name)
+
+
+# ============================================================================
+# Indy exceptions
+# ============================================================================
+
+
+class IndyError(Exception):
+    """Base exception for Indy adapter errors."""
+
+    def __init__(
+        self,
+        message: str = "An error occurred with Indy",
+        http_status: int | None = None,
+    ) -> None:
+        self.message = message
+        self.http_status = http_status
+        super().__init__(message)
+
+
+class IndyLoginError(IndyError):
+    """Login failed (credentials invalid, 2FA timeout, Turnstile)."""
+
+
+class IndyAuthError(IndyError):
+    """Firebase token exchange or refresh failed."""
+
+
+class IndyAPIError(IndyError):
+    """REST API call failed (5xx, timeout, malformed response)."""
+
+
+class IndyConnectionError(IndyError):
+    """connect() not called before using API methods."""
