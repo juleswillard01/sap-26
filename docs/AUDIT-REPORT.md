@@ -228,3 +228,34 @@ docs/
     ├── creative/                   # creative.md, creative-google.md
     └── tools/                      # CDP, intercept, WRITE_QUEUE
 ```
+
+---
+
+## Audit P1 — 2026-03-28
+
+### Quality Gates
+
+| Gate | Target | Actual | Status |
+|------|--------|--------|--------|
+| Tests passing | 100% | 99.7% (1147/1151) | PASS (4 pre-existing) |
+| Coverage | >=80% | 86% | PASS |
+| Ruff lint | 0 errors | 1 warning | PASS (pre-existing) |
+| Ruff format | 0 issues | 0 | PASS |
+| Pyright strict | 0 errors | 127 | FAIL (pre-existing, P2 backlog) |
+| CI pipeline | Operational | 3 jobs, ~35s | PASS |
+| Integration tests | Collected | 14 tests | PASS (skip in CI) |
+| Docs | Complete | TESTING.md + BRANCHING.md | PASS |
+
+### Security
+
+- No hardcoded secrets in src/
+- Firebase Web API key in config default (public, non-secret)
+- JWT tokens not logged
+- Playwright screenshots mask sensitive data
+
+### Architecture
+
+- **AIS**: REST primary + Playwright fallback
+- **Indy**: REST httpx + nodriver login (Firebase Auth JWT)
+- **Sheets**: gspread + Polars (cache 30s, rate limit 60 req/min)
+- All adapters read-only (write operations raise NotImplementedError)

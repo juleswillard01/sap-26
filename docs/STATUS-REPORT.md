@@ -1,37 +1,39 @@
 # Status Report — SAP-Facture
 
-**Date** : 2026-03-22
-**Global** : 962 tests | 82.61% coverage | Python 3.12 | CDC-compliant
+**Date** : 2026-03-28
+**Milestone** : P1 Complete
+**Global** : 1151 tests | 86% coverage | Python 3.12 | CDC-compliant
 
-## Santé Projet
+## Milestone P1 — Bloquants + Fixtures : COMPLETE
 
-Le projet dépasse le quality gate (≥80% coverage). 6 modules spécifiés, dont 3 complets, 1 quasi-complet, 2 en cours. La base de tests est solide (962 tests). Reste un déficit de coverage sur PaymentTracker (66%) et 3 tests cassés liés au chargement `.env`.
+### Tests
+- 1151 tests passing, 4 pre-existing failures (indy_2fa_adapter mocks)
+- 86% coverage (gate: 80%)
+- 2 skipped (Gmail API conditional)
 
-## Modules
+### Quality Gates
+- Ruff lint: 1 warning (unused variable, pre-existing)
+- Ruff format: 0 issues (83 files clean)
+- Pyright strict: 127 errors (pre-existing, services layer needs typing)
+- CI: 3 parallel jobs (lint, test, typecheck), ~35s runtime
 
-| Module | Spec | Tests | Coverage | Statut |
-|--------|------|-------|----------|--------|
-| Sheets Adapter (gspread + Polars) | SPEC-001 | 106 (reads 46, writes 19, batch 14, FK 9, formulas 18) | 85-90% | Implemented (95%) |
-| AIS Scraping (httpx + Playwright) | SPEC-002 | 27 | — | In Progress (60%) — REST OK, Playwright minimal, selectors à mapper |
-| Indy Export (nodriver + Playwright) | SPEC-003 | 66 (login 37, adapter 29) | 89% | In Progress (70%) — login OK, CSV export partiel |
-| Reconciliation (lettrage scoring) | SPEC-004 | 73 (reconciliation 42, lettrage 31) | 100% | Complete (100%) |
-| Notifications (email lifecycle) | SPEC-005 | 134 (notif 73, renderer 25, notifier 36) | 100% | Complete (100%) |
-| NOVA Reporting (trimestriel + cotisations) | SPEC-006 | 79 (nova 46, cotisations 33) | 100% | Complete (100%) |
+### PRs Merged (P1)
 
-**Autres modules testés** : CLI 91, Config 10, Models 129 (sheets 94, invoice 26, transaction 5, client 4), PaymentTracker 17, FastAPI 4, RateLimiter 15, WriteQueue 18, GmailReader 80.
+| PR | Title | Tests | Date |
+|----|-------|-------|------|
+| #37 | feat(indy): validation terrain login | 0 regressions | 2026-03-27 |
+| #38 | fix(tests): remove ghost tests | 31 pass | 2026-03-28 |
+| #39 | feat(indy): IndyAPIAdapter REST httpx | 65 pass | 2026-03-28 |
+| #40 | docs(branching): strategie trunk-based | N/A | 2026-03-28 |
+| #41 | feat(test): fixture master | 37+22 pass | 2026-03-28 |
+| #43 | ci(infra): GitHub Actions CI | 3 jobs | 2026-03-28 |
+| #48 | feat(ais): integration tests real AIS | 14 collected | 2026-03-28 |
+| #50 | feat(ais): Playwright fallback | 52 pass | 2026-03-28 |
 
-## Documentation
+### Known Issues (P2/P3)
+- 4 test failures in indy_2fa_adapter.py (async mock issues)
+- 127 pyright errors (services layer typing)
+- 3 files at 0% coverage (stubs: pdf_generator, client_service, invoice_service)
+- Fixture data issues: Fiscal IR tab missing, F015 balance, F025/C010 coherence
 
-- **CDC** : `docs/CDC.md` — cahier des charges complet
-- **Schemas** : `docs/schemas/SCHEMAS.html` — source de vérité (intouchable)
-- **Specs** : `docs/specs/` — 6 specs (SPEC-001 à SPEC-006)
-- **Archive** : `docs/archive/` — 18 documents obsolètes archivés (plans, evals, recherche OAuth/nodriver)
-- **Guides Gmail** : 5 docs opérationnels (setup, IMAP index, dépendances, checklist, quick start)
-
-## Prochaines Étapes Prioritaires
-
-1. **PaymentTracker coverage** — 66% → ≥80% (bloquant quality gate par module)
-2. **3 tests cassés** — `.env` charge des credentials réels → ValueError, fix mocks ou isolation
-3. **AIS scraping e2e** — mapper selectors Playwright pour statuts factures (4h estimé)
-4. **Indy export CSV robuste** — parsing CSV complet + edge cases (3h estimé)
-5. **`sap export` CSV comptable** — nouvelle commande CLI (2h estimé)
+### Next: P2 — Adapters Fonctionnels

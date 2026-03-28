@@ -1,51 +1,60 @@
 # Dette Technique — SAP-Facture
 
-Date : 2026-03-22
+Date : 2026-03-28
 
-## P0 — Bloquant (quality gate)
+## P2 — Critical (tests, type safety)
 
-| # | Module | Fichier | Problème | Effort |
+| # | Module | Fichier | Probleme | Effort |
 |---|--------|---------|----------|--------|
-| 1 | Core | `src/services/payment_tracker.py` | Coverage 66% — sous le gate 80%. Fonctions standalone `sync_statuses_from_ais()`, `check_status_transition()`, `filter_critical_statuses()` non testées | 2h |
-| 2 | AIS | `src/adapters/ais_adapter.py` | Playwright fallback 0% — REST seul, pas de scraping DOM. Selectors AIS non mappés | 4h |
-| 3 | Indy | `src/adapters/indy_adapter.py` | CSV parsing Journal Book incomplet — export partiel | 3h |
+| 1 | Indy | `src/adapters/indy_2fa_adapter.py` | 4 test failures — `MagicMock` au lieu de `AsyncMock` sur `query_selector_all`, logique timeout polling loop incorrecte | 2h |
+| 2 | Core | Multiple (127 erreurs pyright strict) | Top fichiers : `bank_reconciliation.py`(23), `notification_service.py`(20), `cli.py`(16), `cotisations_service.py`(15), sheets models(13) | 8h |
 
-## P1 — Refactor (seuils dépassés)
+## P3 — Medium (lint, coverage, fixtures)
 
-| # | Module | Fichier | Problème | Effort |
+| # | Module | Fichier | Probleme | Effort |
 |---|--------|---------|----------|--------|
-| 4 | Sheets | `src/adapters/sheets_adapter.py` | 991 lignes (seuil 400L). Extraire : init/formulas, batch ops, single-row ops, cache/rate-limit | 4h |
-| 5 | Sheets | `src/adapters/sheets_adapter.py:_update_row()` | Boucle `worksheet.update()` cellule par cellule — viole la politique batch-only | 1h |
-| 6 | Indy | `src/adapters/indy_*.py` | 3 stratégies login coexistent (`IndyBrowserAdapter._login`, `IndyAutoLoginNodriver.login`, `Indy2FAAdapter.auto_2fa_login`). Consolider en une seule chaîne | 3h |
-| 7 | Core | `src/cli.py` + `payment_tracker.py` + `invoice_service.py` | Triple duplication logique sync/overdue. CLI doit déléguer à PaymentTracker au lieu de réimplémenter | 2h |
+| 3 | Indy | `src/adapters/indy_2fa_adapter.py:479` | 1 ruff warning — variable `dashboard_patterns` non utilisee | 5min |
+| 4 | Core | `pdf_generator.py`(4 stmts), `client_service.py`(5), `invoice_service.py`(7) | 3 fichiers a 0% coverage — stubs sans tests | 1h |
+| 5 | Test | `tests/fixtures/` | Inconsistances fixture data — onglet Fiscal IR absent de expected_results, F015 manquant du bilan mars, F025/C010 incoherence URSSAF | 2h |
+| 6 | Indy | `src/adapters/indy_api_adapter.py` | Coverage 68% — flow nodriver login (`connect` method) non teste | 3h |
 
-## P2 — Code mort / Legacy
+## P4+ — Low (design debt)
 
-| # | Module | Fichier | Problème | Effort |
+| # | Module | Fichier | Probleme | Effort |
 |---|--------|---------|----------|--------|
-| 8 | AIS | `src/adapters/ais_adapter.py` | `_make_auth_header()` défini mais jamais appelé | 15min |
-| 9 | AIS | `src/adapters/ais_adapter.py` | 4 méthodes non couvertes par tests : `get_profile()`, `get_invoice_statuses_by_status()`, `_read_collection_single()`, `_make_auth_header()` | 1h |
-| 10 | Notifications | `src/services/notification_service.py` | Code legacy dupliqué : classe `EmailNotifier` stub + fonctions standalone `_parse_date_statut`, `check_and_notify_overdue` à côté de la classe `NotificationService` | 1h |
-| 11 | Reconciliation | `src/services/bank_reconciliation.py:294-311` | `compute_lettrage_score()` lève `NotImplementedError` — jamais appelée | 15min |
-| 12 | Reconciliation | `src/services/bank_reconciliation.py` | `_match_invoices_with_transactions()` réimplémente le même algo que `LettrageService.compute_matches()` — devrait déléguer | 2h |
-| 13 | Reconciliation | `tests/test_bank_reconciliation.py` | `TestImportTransactions` et `TestReconcileWorkflow` ont ACT/ASSERT commentés — tests passent sans rien valider | 1h |
-| 14 | Core | `src/adapters/pdf_generator.py` | Existe mais D7 = pas de génération PDF (AIS le fait). Docstring implicite, pas de ref explicite à D7 | 15min |
+| 7 | Indy | `src/adapters/indy_api_adapter.py` | `asyncio.run()` dans adapter — cassera dans contexte FastAPI async | 1h |
+| 8 | Indy | `src/adapters/indy_api_adapter.py` | `get_balance()`/`get_account_statements()` retournent types bruts — devraient etre des modeles Pydantic | 2h |
+| 9 | Test | `tests/validate_fixtures.py` | Reimplemente l'algo de scoring au lieu d'importer depuis `src/` | 1h |
+| 10 | Sheets | `src/adapters/sheets_adapter.py` | 991 lignes (seuil 400L). Extraire : init/formulas, batch ops, single-row ops, cache/rate-limit | 4h |
+| 11 | Sheets | `src/adapters/sheets_adapter.py:_update_row()` | Boucle `worksheet.update()` cellule par cellule — viole la politique batch-only | 1h |
+| 12 | Indy | `src/adapters/indy_*.py` | 3 strategies login coexistent (`IndyBrowserAdapter._login`, `IndyAutoLoginNodriver.login`, `Indy2FAAdapter.auto_2fa_login`). Consolider en une seule chaine | 3h |
+| 13 | Core | `src/cli.py` + `payment_tracker.py` + `invoice_service.py` | Triple duplication logique sync/overdue. CLI doit deleguer a PaymentTracker | 2h |
+| 14 | AIS | `src/adapters/ais_adapter.py` | `_make_auth_header()` defini mais jamais appele | 15min |
+| 15 | AIS | `src/adapters/ais_adapter.py` | 4 methodes non couvertes : `get_profile()`, `get_invoice_statuses_by_status()`, `_read_collection_single()`, `_make_auth_header()` | 1h |
+| 16 | Notifications | `src/services/notification_service.py` | Code legacy duplique : classe `EmailNotifier` stub + fonctions standalone a cote de `NotificationService` | 1h |
+| 17 | Reconciliation | `src/services/bank_reconciliation.py:294-311` | `compute_lettrage_score()` leve `NotImplementedError` — jamais appelee | 15min |
+| 18 | Reconciliation | `src/services/bank_reconciliation.py` | `_match_invoices_with_transactions()` reimplemente le meme algo que `LettrageService.compute_matches()` — devrait deleguer | 2h |
+| 19 | Core | `src/adapters/pdf_generator.py` | Existe mais D7 = pas de generation PDF (AIS le fait). Docstring implicite, pas de ref explicite a D7 | 15min |
+| 20 | Gmail | `src/adapters/gmail_reader.py` | `_extract_code()` duplique entre `GmailReader` et `GmailAPIReader` — candidat extraction | 30min |
+| 21 | Sheets | Module Sheets | `exceptions.py` utilise par sheets_adapter mais absent du perimetre formel SPEC-001 | 15min |
 
-## P3 — Cohérence docs
+## Resolved in P1
 
-| # | Module | Fichier | Problème | Effort |
-|---|--------|---------|----------|--------|
-| 15 | NOVA | `.claude/skills/nova-reporting/SKILL.md:44` | Deadline "fin du mois" au lieu de "15 du mois" (code et spec corrects) | 5min |
-| 16 | Gmail | `src/adapters/gmail_reader.py` | `GmailAPIReader.connect()` utilise `from_service_account_file` mais `tools/gmail_auth.py` génère des tokens utilisateur via `InstalledAppFlow` — incompatibilité | 1h |
-| 17 | Gmail | `src/adapters/gmail_reader.py` | `_extract_code()` dupliqué entre `GmailReader` et `GmailAPIReader` — candidat extraction | 30min |
-| 18 | Sheets | Module Sheets | `exceptions.py` utilisé par sheets_adapter mais absent du périmètre formel SPEC-001 | 15min |
+| Probleme | Resolution |
+|----------|------------|
+| Ghost tests in `test_bank_reconciliation.py` — ACT/ASSERT commentes | FIXED (PR #38, commit `328bc99`) |
+| No CI pipeline | FIXED (PR #43) |
+| No integration tests | FIXED (PR #48) |
+| No Playwright fallback for AIS | FIXED (PR #50, commit `fa60e5c`) |
+| No master test fixture | FIXED (PR #41, commit `6ebac6b`) |
+| `GmailAPIReader.connect()` service account vs user token incompatibility | FIXED (PR #49, commit `745b5db`) |
+| NOVA skill deadline "fin du mois" au lieu de "15 du mois" | FIXED (docs corrected) |
 
-## Résumé
+## Resume
 
-| Priorité | Count | Effort total estimé |
+| Priorite | Count | Effort total estime |
 |----------|-------|---------------------|
-| P0 Bloquant | 3 | ~9h |
-| P1 Refactor | 4 | ~10h |
-| P2 Code mort | 7 | ~5h30 |
-| P3 Docs | 4 | ~2h |
-| **Total** | **18** | **~26h30** |
+| P2 Critical | 2 | ~10h |
+| P3 Medium | 4 | ~6h |
+| P4+ Low | 13 | ~16h30 |
+| **Total** | **19** | **~32h30** |
