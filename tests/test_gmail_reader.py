@@ -470,10 +470,11 @@ class TestGmailAPIReaderConnect:
 
     @pytest.mark.skip(reason="googleapiclient not available in test env")
     def test_connect_builds_gmail_service(self, tmp_path) -> None:
-        """connect() builds Gmail API service."""
+        """connect() builds Gmail API service with OAuth2 user tokens."""
         client_file = tmp_path / "credentials.json"
-        client_file.write_text('{"type": "service_account"}')
+        client_file.write_text('{"installed": {"client_id": "x"}}')
         token_file = tmp_path / "token.json"
+        token_file.write_text('{"token": "access", "refresh_token": "refresh"}')
 
         reader = GmailAPIReader(client_file, token_file)
 
@@ -481,11 +482,13 @@ class TestGmailAPIReaderConnect:
             mock_service = MagicMock()
             mock_build.return_value = mock_service
 
+            mock_creds = MagicMock()
+            mock_creds.valid = True
+            mock_creds.expired = False
             with patch(
-                "src.adapters.gmail_reader.google.oauth2.service_account.Credentials.from_service_account_file"
-            ) as mock_creds:
-                mock_creds.return_value = MagicMock()
-
+                "google.oauth2.credentials.Credentials.from_authorized_user_file",
+                return_value=mock_creds,
+            ):
                 reader.connect()
 
                 assert reader._service is not None
@@ -507,13 +510,13 @@ class TestGmailAPIReaderConnect:
     def test_connect_raises_on_service_build_error(self, tmp_path) -> None:
         """connect() raises RuntimeError on service build failure."""
         client_file = tmp_path / "credentials.json"
-        client_file.write_text('{"type": "service_account"}')
+        client_file.write_text('{"installed": {"client_id": "x"}}')
 
         reader = GmailAPIReader(client_file, tmp_path / "token.json")
 
         with (
             patch(
-                "src.adapters.gmail_reader.google.oauth2.service_account.Credentials.from_service_account_file",
+                "google.oauth2.credentials.Credentials.from_authorized_user_file",
                 side_effect=Exception("Invalid credentials"),
             ),
             pytest.raises(RuntimeError, match="Failed to build"),
@@ -1100,15 +1103,12 @@ class TestGmailReaderLabelSupport:
     def test_gmail_api_reader_connect_import_error(self, tmp_path) -> None:
         """connect() raises RuntimeError if google libs not installed."""
         client_file = tmp_path / "credentials.json"
-        client_file.write_text('{"type": "service_account"}')
+        client_file.write_text('{"installed": {"client_id": "x"}}')
 
         reader = GmailAPIReader(client_file, tmp_path / "token.json")
 
-        # Patch where it's imported during method execution
         with (
-            patch(
-                "google.oauth2.service_account.Credentials", side_effect=ImportError("No module")
-            ),
+            patch.dict("sys.modules", {"google.oauth2.credentials": None}),
             pytest.raises(RuntimeError, match="google-auth-oauthlib"),
         ):
             reader.connect()
@@ -1116,14 +1116,15 @@ class TestGmailReaderLabelSupport:
     def test_gmail_api_reader_connect_generic_exception(self, tmp_path) -> None:
         """connect() raises RuntimeError on service build failure."""
         client_file = tmp_path / "credentials.json"
-        client_file.write_text('{"type": "service_account"}')
+        client_file.write_text('{"installed": {"client_id": "x"}}')
 
         reader = GmailAPIReader(client_file, tmp_path / "token.json")
 
-        # Mock the import to simulate missing google libs
-        with patch.dict("sys.modules", {"google.oauth2.service_account": None}):
-            with pytest.raises(RuntimeError, match="google-auth-oauthlib"):
-                reader.connect()
+        with (
+            patch.dict("sys.modules", {"google.oauth2.credentials": None}),
+            pytest.raises(RuntimeError, match="google-auth-oauthlib"),
+        ):
+            reader.connect()
 
     def test_gmail_api_reader_get_latest_2fa_code_timeout_boundary(self, tmp_path) -> None:
         """get_latest_2fa_code() handles exact timeout boundary."""
