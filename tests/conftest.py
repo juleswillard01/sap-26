@@ -1,7 +1,7 @@
 """Shared test fixtures for SAP-Facture.
 
 Provides reusable fixtures for Settings, gspread mocking, JSON fixture data,
-factory_boy factories, and freezegun time freezing.
+factory_boy factories, freezegun time freezing, and mock Indy API server.
 """
 
 from __future__ import annotations
@@ -276,3 +276,46 @@ def now_utc() -> datetime:
 def today() -> date:
     """Fixed date for deterministic tests."""
     return date(2026, 3, 21)
+
+
+# ──────────────────────────────────────────────
+# Mock Indy API server
+# ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def mock_indy_server() -> Any:
+    """Start mock Indy API on a random free port, yield base URL, shut down after test."""
+    import socket
+    import threading
+
+    import uvicorn
+
+    from tests.mocks.indy_api_server import app
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    # Wait for server to be ready
+    import time
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                break
+        except OSError:
+            time.sleep(0.05)
+
+    yield f"http://127.0.0.1:{port}"
+
+    server.should_exit = True
+    thread.join(timeout=5.0)
