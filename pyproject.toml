@@ -60,7 +60,10 @@ include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-x --tb=short -q --cov=src --cov-fail-under=80"
+addopts = "-x --tb=short -q --cov=src --cov-fail-under=80 -m 'not integration_ais'"
+markers = [
+    "integration_ais: Tests requiring real AIS connection (skip in CI)",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
