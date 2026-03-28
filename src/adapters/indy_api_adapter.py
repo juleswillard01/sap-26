@@ -502,6 +502,70 @@ class IndyAPIAdapter:
         """Récupère les relevés mensuels (URLs PDF pré-signées Swan)."""
         return self._api_get("/api/compte-pro/account-statements")
 
+    def export_journal_csv(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Exporte les transactions au format dict (compatibilité InbyAdapter).
+
+        Drop-in replacement pour l'ancien export Playwright.
+        Appelle get_transactions() et convertit en list[dict].
+
+        Args:
+            start_date: Date début ISO. Défaut: 30 jours avant aujourd'hui.
+            end_date: Date fin ISO. Défaut: aujourd'hui.
+
+        Returns:
+            Liste de transactions au format dict.
+        """
+        if start_date is None or end_date is None:
+            today = date.today()
+            if end_date is None:
+                end_date = today.isoformat()
+            if start_date is None:
+                from datetime import timedelta
+
+                start_date = (today - timedelta(days=30)).isoformat()
+
+        transactions = self.get_transactions(start_date, end_date)
+        return [t.model_dump() for t in transactions]
+
+    def export_to_csv(
+        self,
+        start_date: str,
+        end_date: str,
+        output_path: str | None = None,
+    ) -> Any:
+        """Exporte les transactions en CSV via Polars.
+
+        Args:
+            start_date: Date début ISO (YYYY-MM-DD).
+            end_date: Date fin ISO (YYYY-MM-DD).
+            output_path: Chemin fichier CSV. Si None, retourne le DataFrame.
+
+        Returns:
+            Polars DataFrame des transactions.
+        """
+        import polars as pl
+
+        transactions = self.get_transactions(start_date, end_date)
+        if not transactions:
+            return pl.DataFrame()
+
+        rows = [t.model_dump() for t in transactions]
+        df = pl.DataFrame(rows)
+
+        if output_path:
+            from pathlib import Path
+
+            path = Path(output_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            df.write_csv(path)
+            logger.info("CSV exported", extra={"path": str(path), "rows": len(df)})
+
+        return df
+
     def get_accounting_summary(
         self,
         start_date: str | None = None,
