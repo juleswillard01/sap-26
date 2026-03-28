@@ -946,6 +946,108 @@ class TestGetPendingTransactions:
 
 
 # ============================================================================
+# E1: export_journal_csv + export_to_csv
+# ============================================================================
+
+
+class TestExportJournalCsv:
+    """Test export_journal_csv compatibility layer."""
+
+    def test_returns_list_of_dicts(self, connected_adapter: Any) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_TRANSACTIONS_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.get.return_value = mock_response
+            result = connected_adapter.export_journal_csv("2025-06-01", "2025-06-30")
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert isinstance(result[0], dict)
+        assert result[0]["indy_id"] == "txn001"
+        assert result[0]["montant"] == 150.00
+
+    def test_default_dates(self, connected_adapter: Any) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "transactions": [],
+            "nbTransactions": 0,
+            "toCategorizeCount": 0,
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.get.return_value = mock_response
+            result = connected_adapter.export_journal_csv()
+
+        assert result == []
+        # Verify dates were passed
+        call_kwargs = mock_client.get.call_args
+        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params", {})
+        assert "startDate" in params
+        assert "endDate" in params
+
+
+class TestExportToCsv:
+    """Test export_to_csv Polars export."""
+
+    def test_returns_dataframe(self, connected_adapter: Any) -> None:
+        import polars as pl
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_TRANSACTIONS_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.get.return_value = mock_response
+            df = connected_adapter.export_to_csv("2025-06-01", "2025-06-30")
+
+        assert isinstance(df, pl.DataFrame)
+        assert len(df) == 2
+        assert "indy_id" in df.columns
+
+    def test_empty_returns_empty_dataframe(self, connected_adapter: Any) -> None:
+        import polars as pl
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "transactions": [],
+            "nbTransactions": 0,
+            "toCategorizeCount": 0,
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.get.return_value = mock_response
+            df = connected_adapter.export_to_csv("2025-01-01", "2025-01-31")
+
+        assert isinstance(df, pl.DataFrame)
+        assert len(df) == 0
+
+    def test_writes_csv_file(self, connected_adapter: Any, tmp_path: Any) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = SAMPLE_TRANSACTIONS_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+
+        csv_path = tmp_path / "export.csv"
+
+        with patch.object(connected_adapter, "_client") as mock_client:
+            mock_client.get.return_value = mock_response
+            connected_adapter.export_to_csv("2025-06-01", "2025-06-30", output_path=str(csv_path))
+
+        assert csv_path.exists()
+        content = csv_path.read_text()
+        assert "txn001" in content
+        assert "txn002" in content
+
+
+# ============================================================================
 # M3: _api_post error path test
 # ============================================================================
 
