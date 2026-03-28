@@ -276,3 +276,27 @@ def now_utc() -> datetime:
 def today() -> date:
     """Fixed date for deterministic tests."""
     return date(2026, 3, 21)
+
+
+# ──────────────────────────────────────────────
+# Mock IMAP server for Gmail 2FA
+# ──────────────────────────────────────────────
+
+
+@pytest.fixture()
+def mock_gmail_2fa_server(request: pytest.FixtureRequest) -> Any:
+    """Start mock IMAP server with a 2FA email.
+
+    Parametrize via ``@pytest.mark.parametrize("mock_gmail_2fa_server", [...], indirect=True)``
+    with a dict containing optional keys ``code`` (str) and ``sender`` (str).
+    """
+    from tests.mocks.gmail_2fa_server import MockGmail2FAServer
+
+    params: dict[str, str] = getattr(request, "param", {}) or {}
+    code = params.get("code", "123456")
+    sender = params.get("sender", "support@indy.fr")
+
+    server = MockGmail2FAServer(code=code, sender=sender)
+    server.start()
+    yield server
+    server.stop()
