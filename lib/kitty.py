@@ -1,4 +1,4 @@
-"""Kitty terminal orchestration — replaces tmux for agent spawning."""
+"""Kitty terminal orchestration — spawn Claude in existing grid windows."""
 
 from __future__ import annotations
 
@@ -9,20 +9,10 @@ from pathlib import Path
 
 
 @dataclass
-class AgentWindow:
-    name: str
-    worktree: Path
-    kitty_id: int = 0
-    pid: int = 0
-
-
-@dataclass
 class KittyOrchestrator:
-    """Manage Claude Code sessions in Kitty tabs/splits."""
+    """Send commands to existing Kitty windows (grid tab with A/B/C/D)."""
 
     base_path: Path = field(default_factory=lambda: Path.home() / "Documents" / "3-git" / "SAP")
-    tab_title: str = "Agents"
-    windows: dict[str, AgentWindow] = field(default_factory=dict)
 
     def _kitty(self, *args: str) -> str:
         result = subprocess.run(
@@ -32,86 +22,98 @@ class KittyOrchestrator:
         )
         return result.stdout.strip()
 
-    def create_tab(self) -> None:
-        """Create a new Kitty tab for agents."""
-        self._kitty("launch", "--type=tab", f"--title={self.tab_title}")
-
-    def spawn_agent(self, agent_name: str, worktree: str, prompt: str) -> AgentWindow:
-        """Spawn a Claude Code session in a new Kitty split."""
-        cwd = self.base_path / worktree
-
-        if not cwd.exists():
-            raise FileNotFoundError(f"Worktree not found: {cwd}")
-
-        output = self._kitty(
-            "launch",
-            "--type=window",
-            f"--title={agent_name}",
-            f"--cwd={cwd}",
-            "--keep-focus",
-            "claude",
-            "--print",
-            prompt,
-        )
-
-        window = AgentWindow(name=agent_name, worktree=cwd)
-        self.windows[agent_name] = window
-        return window
-
-    def spawn_interactive(self, agent_name: str, worktree: str, prompt: str) -> AgentWindow:
-        """Spawn an interactive Claude session (not --print)."""
-        cwd = self.base_path / worktree
-
-        if not cwd.exists():
-            raise FileNotFoundError(f"Worktree not found: {cwd}")
-
-        self._kitty(
-            "launch",
-            "--type=window",
-            f"--title={agent_name}",
-            f"--cwd={cwd}",
-            "claude",
-            "-p",
-            prompt,
-        )
-
-        window = AgentWindow(name=agent_name, worktree=cwd)
-        self.windows[agent_name] = window
-        return window
-
-    def spawn_batch(self, agents: list[dict]) -> list[AgentWindow]:
-        """Spawn multiple agents in one tab with splits.
-
-        agents: [{"name": "architect", "worktree": "A", "prompt": "..."}]
-        """
-        self.create_tab()
-        results = []
-        for agent in agents:
-            w = self.spawn_agent(agent["name"], agent["worktree"], agent["prompt"])
-            results.append(w)
-        return results
-
-    def list_windows(self) -> list[dict]:
-        """List all Kitty windows."""
+    def _get_windows(self) -> list[dict]:
+        """Get all kitty windows."""
         output = self._kitty("ls")
         try:
-            return json.loads(output)
+            data = json.loads(output)
+            windows = []
+            for os_win in data:
+                for tab in os_win.get("tabs", []):
+                    for win in tab.get("windows", []):
+                        windows.append(win)
+            return windows
         except json.JSONDecodeError:
             return []
 
-    def close_agent(self, agent_name: str) -> None:
-        """Close a specific agent window."""
-        if agent_name in self.windows:
-            self._kitty("close-window", f"--match=title:{agent_name}")
-            del self.windows[agent_name]
+    def _find_window_by_title(self, title: str) -> dict | None:
+        """Find a window by its title."""
+        for win in self._get_windows():
+            if win.get("title", "") == title:
+                return win
+        return None
 
-    def close_all(self) -> None:
-        """Close all agent windows."""
-        for name in list(self.windows.keys()):
-            self.close_agent(name)
+    def _find_window_by_cwd(self, cwd_suffix: str) -> dict | None:
+        """Find a window whose cwd ends with the given suffix."""
+        for win in self._get_windows():
+            if win.get("cwd", "").endswith(cwd_suffix):
+                return win
+        return None
 
-    def status(self) -> dict:
-        """Get status of all agent windows."""
-        return {
-            name: {"worktree": str(w.worktree), "active": True} for name, w in self.windows.items()
-        }
+    def send_to_window(self, window_title: str, text: str) -> bool:
+        """Send text input to an existing window by title."""
+        self._kitty("send-text", f"--match=title:{window_title}", text + "\n")
+        return True
+
+    def spawn_claude_in_window(self, worktree: str, prompt: str) -> bool:
+        """Launch claude in an existing grid window (A/B/C/D).
+
+        Writes prompt to a temp file to avoid shell length limits.
+        """
+        cwd = self.base_path / worktree
+        if not cwd.exists():
+            return False
+
+        # Split prompt into system (context) and task
+        # Write to temp files to avoid shell length limits
+        system_file = Path(f"/tmp/claude-system-{worktree}.md")
+        task_file = Path(f"/tmp/claude-task-{worktree}.md")
+
+        # Everything before "# Task" is system context, after is the task
+        if "\n# Task\n" in prompt:
+            system, task = prompt.split("\n# Task\n", 1)
+        else:
+            system = ""
+            task = prompt
+
+        system_file.write_text(system.strip())
+        task_file.write_text(task.strip())
+
+        launcher = Path(f"/tmp/claude-launch-{worktree}.sh")
+        lines = [
+            "#!/bin/bash",
+            f"cd {cwd}",
+            f'claude --system-prompt "$(cat {system_file})" "$(cat {task_file})"',
+        ]
+        launcher.write_text("\n".join(lines) + "\n")
+        launcher.chmod(0o755)
+
+        self._kitty("send-text", f"--match=title:{worktree}", f"bash {launcher}\n")
+        return True
+
+    def spawn_batch(self, agents: list[dict]) -> int:
+        """Spawn Claude in multiple existing windows.
+
+        agents: [{"name": "architect", "worktree": "A", "prompt": "..."}]
+        """
+        count = 0
+        for agent in agents:
+            ok = self.spawn_claude_in_window(agent["worktree"], agent["prompt"])
+            if ok:
+                count += 1
+        return count
+
+    def list_grid_windows(self) -> list[dict]:
+        """List windows in the grid tab (A/B/C/D)."""
+        results = []
+        for win in self._get_windows():
+            title = win.get("title", "")
+            if title in ("A", "B", "C", "D", "E", "F", "G", "H"):
+                results.append(
+                    {
+                        "title": title,
+                        "cwd": win.get("cwd", ""),
+                        "is_focused": win.get("is_focused", False),
+                    }
+                )
+        return results

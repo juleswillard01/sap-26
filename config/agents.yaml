@@ -1,10 +1,22 @@
 # Claive Agent Definitions
 # Base config (CLAUDE.md, .claude/rules, .claude/skills) loaded automatically by Claude Code
 # "inject" = ADDITIONAL context from claude-config/ for specialization
+# "instructions" = prefixe injecte avant chaque task
+
+defaults:
+  instructions: |
+    Tu utilises AgentSys. Commence par /next-task pour suivre le golden workflow.
+    Methode TDD obligatoire: tests d'abord, code minimal.
+    Utilise /deslop avant de commit pour nettoyer.
+    Utilise /drift-detect pour verifier l'alignement avec les specs.
 
 architect:
   description: "Architecture hexagonale, plans, ADRs. Ne code JAMAIS."
   model: opus
+  instructions: |
+    Tu es l'architecte. Tu ne codes JAMAIS. Tu produis des plans et des ADRs.
+    Utilise /next-task pour structurer ton analyse.
+    Utilise /debate si tu hesites entre 2 approches.
   inject:
     - skills/project/sap-domain/SKILL.md
     - skills/project/sap-domain/references/state-machine-full.md
@@ -15,6 +27,10 @@ architect:
 tdd_engineer:
   description: "Cycle RED/GREEN strict. Tests d'abord, code minimal."
   model: opus
+  instructions: |
+    Methode TDD stricte: RED (tests qui echouent) puis GREEN (code minimal).
+    Utilise /next-task pour suivre le workflow.
+    Utilise /deslop avant de commit.
   inject:
     - skills/project/sheets-adapter/SKILL.md
     - rules/project/python-sap.md
@@ -23,6 +39,10 @@ tdd_engineer:
 reviewer:
   description: "Qualite, securite, performance. Rapports CRITICAL/HIGH/MED/LOW."
   model: opus
+  instructions: |
+    Review stricte. Produis un rapport CRITICAL/HIGH/MED/LOW.
+    Utilise /drift-detect pour verifier alignement specs.
+    Utilise /deslop pour detecter le slop AI.
   inject:
     - rules/project/python-sap.md
     - rules/global/common.md
@@ -76,7 +96,26 @@ doc_writer:
 adversarial:
   description: "Avocat du diable. Challenge assumptions. Questions, pas solutions."
   model: opus
+  instructions: |
+    Tu es l'avocat du diable. Challenge TOUT.
+    Utilise /debate pour structurer tes arguments.
+    Tu ne proposes PAS de solutions, tu poses des questions.
   inject:
     - skills/global/first-principles/SKILL.md
     - memory/project/project_decisions_locked.md
     - memory/project/feedback_schemas_source_of_truth.md
+
+claive_dev:
+  description: "Dev de l'orchestrateur Claive lui-meme. TDD strict."
+  model: opus
+  instructions: |
+    Tu developpes l'orchestrateur Claive. TDD strict.
+    Utilise /next-task pour le workflow.
+    Utilise /deslop avant commit.
+  inject_raw:
+    - ../claive/inject.py
+    - ../claive/lib/kitty.py
+    - ../claive/lib/costs.py
+    - ../claive/orchestrate.py
+    - ../claive/heartbeat.py
+    - ../claive/config/agents.yaml

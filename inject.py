@@ -8,7 +8,8 @@ from pathlib import Path
 import yaml
 
 VAULT = Path(__file__).parent.parent / "main" / "claude-config"
-AGENTS_YAML = Path(__file__).parent / "config" / "agents.yaml"
+CLAIVE = Path(__file__).parent
+AGENTS_YAML = CLAIVE / "config" / "agents.yaml"
 
 
 def assemble(agent_name: str, task: str) -> str:
@@ -17,16 +18,34 @@ def assemble(agent_name: str, task: str) -> str:
         available = ", ".join(agents.keys())
         sys.exit(f"Unknown agent: {agent_name}. Available: {available}")
 
+    config = agents[agent_name]
     parts: list[str] = []
-    for rel_path in agents[agent_name]["inject"]:
+
+    # Standard inject: relative to vault (claude-config/)
+    for rel_path in config.get("inject", []):
         full_path = VAULT / rel_path
         if full_path.exists():
             parts.append(f"# {rel_path}\n\n{full_path.read_text().strip()}")
-        else:
-            parts.append(f"# {rel_path}\n\n[FILE NOT FOUND]")
+
+    # Raw inject: relative to claive/ (for self-development)
+    for rel_path in config.get("inject_raw", []):
+        full_path = CLAIVE / rel_path.replace("../claive/", "")
+        if full_path.exists():
+            parts.append(f"# {full_path.name}\n\n```python\n{full_path.read_text().strip()}\n```")
 
     context = "\n\n---\n\n".join(parts)
-    return f"{context}\n\n---\n\n# Task\n\n{task}"
+
+    # Instructions from YAML (agent-specific or defaults)
+    defaults = agents.get("defaults", {})
+    instructions = config.get("instructions", defaults.get("instructions", ""))
+
+    # Assemble: context (system) + instructions + task
+    task_block = (
+        f"# Instructions\n\n{instructions.strip()}\n\n# Task\n\n{task}"
+        if instructions
+        else f"# Task\n\n{task}"
+    )
+    return f"{context}\n\n---\n\n{task_block}"
 
 
 if __name__ == "__main__":
